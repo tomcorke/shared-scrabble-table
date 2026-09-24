@@ -7,10 +7,16 @@ import {
 } from "react";
 import "./App.css";
 import {
-  drawTileFace,
+  addTileDragImpulse,
+  canSendDragUpdate,
+  createTile,
+  DRAG_UPDATE_INTERVAL_MS,
+  MAX_POSITION_OFFSET,
+  MAX_TILE_ROTATION,
   moveTile,
+  projectedTileCenter,
   snapshotForPlayer,
-  TILE_POINTS,
+  stepTileSwing,
   type MoveDestination,
   type Player,
   type TableState,
@@ -30,9 +36,21 @@ const PLAYER_COLORS = [
   "#858bd0",
 ];
 const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
+const DRAG_LIFT = 8;
+const SWING_STEP = 1 / 120;
 
 function playerColor(seat: number) {
   return PLAYER_COLORS[seat] ?? `hsl(${(seat * 137.508) % 360} 55% 54%)`;
+}
+
+function monotonicNow() {
+  return performance.now();
+}
+
+function positiveDimension(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.min(value, 10_000)
+    : fallback;
 }
 
 type PeerRole = "host" | "guest";
@@ -46,21 +64,53 @@ type Invite = {
   status: InviteStatus;
 };
 type Action =
-  | { kind: "draw" }
+  | {
+      kind: "draw";
+      viewportWidth: number;
+      rackWidth: number;
+      rackHeight: number;
+    }
+  | {
+      kind: "drag-preview";
+      tileId: string;
+      x: number;
+      y: number;
+      rotation: number;
+    }
+  | { kind: "drag-end"; tileId: string }
   | {
       kind: "move";
       tileId: string;
       destination: MoveDestination;
       x: number;
       y: number;
+      rotation: number;
     };
+type PendingPeerDragUpdate = { tile: Tile; timer: number };
+type PendingDragUpdate = {
+  tileId: string;
+  x: number;
+  y: number;
+  rotation: number;
+  timer: number;
+};
 type DragState = {
   tileId: string;
   pointerId: number;
   clientX: number;
   clientY: number;
+  startClientX: number;
+  startClientY: number;
   offsetX: number;
   offsetY: number;
+  width: number;
+  height: number;
+  startRotation: number;
+  rotation: number;
+  angularVelocity: number;
+  destination: MoveDestination | null;
+  previewCenter: { x: number; y: number } | null;
+  sharedPreview: boolean;
 };
 
 function waitForIceCandidates(peer: RTCPeerConnection) {
@@ -101,6 +151,27 @@ function parseMessage(data: unknown): Record<string, unknown> | null {
   }
 }
 
+function isTile(value: unknown): value is Tile {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.face === "string" &&
+    typeof value.points === "number" &&
+    Number.isFinite(value.points) &&
+    typeof value.ownerId === "string" &&
+    (value.zone === "hand" || value.zone === "board") &&
+    typeof value.x === "number" &&
+    Number.isFinite(value.x) &&
+    Math.abs(value.x) <= MAX_POSITION_OFFSET &&
+    typeof value.y === "number" &&
+    Number.isFinite(value.y) &&
+    Math.abs(value.y) <= MAX_POSITION_OFFSET &&
+    typeof value.rotation === "number" &&
+    Number.isFinite(value.rotation) &&
+    Math.abs(value.rotation) <= MAX_TILE_ROTATION
+  );
+}
+
 function isTableState(value: unknown): value is TableState {
   if (
     !isRecord(value) ||
@@ -120,20 +191,7 @@ function isTableState(value: unknown): value is TableState {
         typeof player.tileCount === "number" &&
         Number.isInteger(player.tileCount) &&
         player.tileCount >= 0,
-    ) &&
-    value.tiles.every(
-      (tile) =>
-        isRecord(tile) &&
-        typeof tile.id === "string" &&
-        typeof tile.face === "string" &&
-        typeof tile.points === "number" &&
-        typeof tile.ownerId === "string" &&
-        (tile.zone === "hand" || tile.zone === "board") &&
-        typeof tile.x === "number" &&
-        Number.isFinite(tile.x) &&
-        typeof tile.y === "number" &&
-        Number.isFinite(tile.y),
-    )
+    ) && value.tiles.every(isTile)
   );
 }
 
@@ -143,23 +201,6 @@ function countTiles(players: Player[], tiles: Tile[]): Player[] {
     ...player,
     tileCount: tiles.filter((tile) => tile.ownerId === player.id).length,
   }));
-}
-
-function createTile(ownerId: string, tiles: Tile[]): Tile {
-  const handCount = tiles.filter(
-    (tile) => tile.ownerId === ownerId && tile.zone === "hand",
-  ).length;
-  const face = drawTileFace();
-
-  return {
-    id: crypto.randomUUID(),
-    face,
-    points: TILE_POINTS[face],
-    ownerId,
-    zone: "hand",
-    x: 7 + (handCount % 7) * 13,
-    y: handCount % 14 < 7 ? 30 : 68,
-  };
 }
 
 function sendMessage(channel: RTCDataChannel, message: unknown) {
@@ -177,19 +218,36 @@ function pointInside(element: HTMLElement | null, x: number, y: number) {
   );
 }
 
+function projectDragCenter(
+  drag: DragState,
+  pointerX = drag.clientX,
+  pointerY = drag.clientY,
+  rotation = drag.rotation,
+) {
+  return projectedTileCenter({
+    pointerX,
+    pointerY,
+    grabX: drag.offsetX,
+    grabY: drag.offsetY,
+    width: drag.width,
+    height: drag.height,
+    rotation,
+  });
+}
+
 function positionIn(element: HTMLElement, x: number, y: number) {
   const bounds = element.getBoundingClientRect();
-  const insetX = Math.min(49, (28 / bounds.width) * 100);
-  const insetY = Math.min(49, (34 / bounds.height) * 100);
+  const left = bounds.left + element.clientLeft;
+  const top = bounds.top + element.clientTop;
+  const width = element.clientWidth;
+  const height = element.clientHeight;
+  const centerX = Math.max(left, Math.min(left + width, x));
+  const centerY = Math.max(top, Math.min(top + height, y));
   return {
-    x: Math.max(
-      insetX,
-      Math.min(100 - insetX, ((x - bounds.left) / bounds.width) * 100),
-    ),
-    y: Math.max(
-      insetY,
-      Math.min(100 - insetY, ((y - bounds.top) / bounds.height) * 100),
-    ),
+    x: centerX - left - width / 2,
+    y: centerY - top - height / 2,
+    centerX,
+    centerY,
   };
 }
 
@@ -218,6 +276,9 @@ function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [remoteDragPreviews, setRemoteDragPreviews] = useState<
+    Record<string, Tile>
+  >({});
 
   const gameRef = useRef(game);
   const myIdRef = useRef<string>(myId);
@@ -228,9 +289,92 @@ function App() {
   const guestPeerRef = useRef<RTCPeerConnection | null>(null);
   const guestChannelRef = useRef<RTCDataChannel | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const pendingDragUpdateRef = useRef<PendingDragUpdate | null>(null);
+  const lastDragUpdateAtRef = useRef(Number.NEGATIVE_INFINITY);
+  const lastPeerDragUpdateAtRef = useRef(new Map<RTCDataChannel, number>());
+  const pendingPeerDragUpdatesRef = useRef(
+    new Map<RTCDataChannel, PendingPeerDragUpdate>(),
+  );
+  const activeDragOwnersRef = useRef(new Map<string, string>());
   const tableRef = useRef<HTMLDivElement | null>(null);
   const discardRef = useRef<HTMLDivElement | null>(null);
   const handRef = useRef<HTMLDivElement | null>(null);
+  const draggingTileId = drag?.tileId;
+
+  useEffect(
+    () => () => {
+      if (pendingDragUpdateRef.current)
+        window.clearTimeout(pendingDragUpdateRef.current.timer);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!draggingTileId) return;
+
+    let frame = 0;
+    let previousTime: number | null = null;
+    let accumulator = 0;
+    const animate = (time: number) => {
+      if (previousTime === null) {
+        previousTime = time;
+      } else {
+        accumulator += Math.min((time - previousTime) / 1000, 0.05);
+        previousTime = time;
+      }
+
+      const current = dragRef.current;
+      if (!current || current.tileId !== draggingTileId) return;
+      let rotation = current.rotation;
+      let angularVelocity = current.angularVelocity;
+      while (accumulator >= SWING_STEP) {
+        const swing = stepTileSwing({
+          rotation,
+          angularVelocity,
+          dt: SWING_STEP,
+        });
+        rotation = swing.rotation;
+        angularVelocity = swing.angularVelocity;
+        accumulator -= SWING_STEP;
+      }
+
+      if (
+        rotation !== current.rotation ||
+        angularVelocity !== current.angularVelocity
+      ) {
+        const next: DragState = {
+          ...current,
+          rotation,
+          angularVelocity,
+          previewCenter: null,
+        };
+        const previewArea =
+          next.destination === "board"
+            ? tableRef.current
+            : next.destination === "hand"
+              ? handRef.current
+              : null;
+        if (previewArea) {
+          const center = projectDragCenter(next);
+          const position = positionIn(previewArea, center.x, center.y);
+          next.previewCenter = { x: position.centerX, y: position.centerY };
+        }
+        dragRef.current = next;
+        setDrag(next);
+      }
+      frame = requestAnimationFrame(animate);
+    };
+
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [draggingTileId]);
+
+  const dragDestination = (x: number, y: number): MoveDestination | null => {
+    if (pointInside(discardRef.current, x, y)) return "discard";
+    if (pointInside(tableRef.current, x, y)) return "board";
+    if (pointInside(handRef.current, x, y)) return "hand";
+    return null;
+  };
 
   const setInviteStatus = (id: string, status: InviteStatus) => {
     setInvites((current) =>
@@ -250,16 +394,116 @@ function App() {
   const snapshotFor = (playerId: string): TableState =>
     snapshotForPlayer(gameRef.current, playerId);
 
-  const broadcast = () => {
+  const updateRemoteDragPreview = (tileId: string, tile: Tile | null) => {
+    setRemoteDragPreviews((current) => {
+      const next = { ...current };
+      if (tile) next[tileId] = tile;
+      else delete next[tileId];
+      return next;
+    });
+  };
+
+  const broadcastDragPreview = (
+    tile: Tile,
+    excludedChannel?: RTCDataChannel,
+    showOnHost = false,
+  ) => {
+    activeDragOwnersRef.current.set(tile.id, tile.ownerId);
+    if (showOnHost) updateRemoteDragPreview(tile.id, tile);
+    for (const channel of hostChannelsRef.current.keys()) {
+      if (channel !== excludedChannel)
+        sendMessage(channel, { type: "tile-preview", tile });
+    }
+  };
+
+  const cancelPendingPeerDragUpdate = (channel: RTCDataChannel) => {
+    const pending = pendingPeerDragUpdatesRef.current.get(channel);
+    if (!pending) return;
+    window.clearTimeout(pending.timer);
+    pendingPeerDragUpdatesRef.current.delete(channel);
+  };
+
+  const queuePeerDragPreview = (channel: RTCDataChannel, tile: Tile) => {
+    const relay = (preview: Tile, sentAt: number) => {
+      lastPeerDragUpdateAtRef.current.set(channel, sentAt);
+      broadcastDragPreview(preview, channel, true);
+    };
+    const now = monotonicNow();
+    const lastSentAt =
+      lastPeerDragUpdateAtRef.current.get(channel) ?? -Infinity;
+    if (canSendDragUpdate(now, lastSentAt)) {
+      cancelPendingPeerDragUpdate(channel);
+      relay(tile, now);
+      return;
+    }
+
+    let pending = pendingPeerDragUpdatesRef.current.get(channel);
+    if (!pending) {
+      pending = { tile, timer: 0 };
+      pendingPeerDragUpdatesRef.current.set(channel, pending);
+    } else {
+      pending.tile = tile;
+    }
+    if (pending.timer === 0) {
+      const flush = () => {
+        if (pendingPeerDragUpdatesRef.current.get(channel) !== pending) return;
+        if (hostChannelsRef.current.get(channel) !== pending.tile.ownerId) {
+          pendingPeerDragUpdatesRef.current.delete(channel);
+          return;
+        }
+        const sentAt = monotonicNow();
+        const last = lastPeerDragUpdateAtRef.current.get(channel) ?? -Infinity;
+        if (!canSendDragUpdate(sentAt, last)) {
+          pending.timer = window.setTimeout(
+            flush,
+            last + DRAG_UPDATE_INTERVAL_MS - sentAt,
+          );
+          return;
+        }
+        pendingPeerDragUpdatesRef.current.delete(channel);
+        relay(pending.tile, sentAt);
+      };
+      pending.timer = window.setTimeout(
+        flush,
+        Math.max(0, lastSentAt + DRAG_UPDATE_INTERVAL_MS - now),
+      );
+    }
+  };
+
+  const clearDragPreview = (tileId: string) => {
+    activeDragOwnersRef.current.delete(tileId);
+    updateRemoteDragPreview(tileId, null);
+  };
+
+  const endDragPreview = (tileId: string, excludedChannel?: RTCDataChannel) => {
+    if (!activeDragOwnersRef.current.has(tileId)) return false;
+    clearDragPreview(tileId);
+    for (const channel of hostChannelsRef.current.keys()) {
+      if (channel !== excludedChannel)
+        sendMessage(channel, { type: "tile-preview-end", tileId });
+    }
+    return true;
+  };
+
+  const broadcast = (finishedDragTileId?: string) => {
     for (const [channel, playerId] of hostChannelsRef.current) {
-      sendMessage(channel, { type: "snapshot", state: snapshotFor(playerId) });
+      sendMessage(channel, {
+        type: "snapshot",
+        state: snapshotFor(playerId),
+        finishedDragTileId,
+      });
     }
   };
 
   const disconnectHostChannel = (inviteId: string, channel: RTCDataChannel) => {
     const playerId = hostChannelsRef.current.get(channel);
+    cancelPendingPeerDragUpdate(channel);
     hostChannelsRef.current.delete(channel);
+    lastPeerDragUpdateAtRef.current.delete(channel);
     if (playerId) {
+      for (const [tileId, ownerId] of activeDragOwnersRef.current) {
+        if (ownerId === playerId) endDragPreview(tileId);
+      }
       const current = gameRef.current;
       commitHostState({
         players: current.players.filter((player) => player.id !== playerId),
@@ -309,58 +553,153 @@ function App() {
     if (!playerId) return;
 
     const current = gameRef.current;
-    if (message.action.kind === "draw") {
-      commitHostState({
-        ...current,
-        tiles: [...current.tiles, createTile(playerId, current.tiles)],
-      });
-    } else if (
-      message.action.kind === "move" &&
-      typeof message.action.tileId === "string" &&
-      (message.action.destination === "hand" ||
-        message.action.destination === "board" ||
-        message.action.destination === "discard") &&
-      typeof message.action.x === "number" &&
-      Number.isFinite(message.action.x) &&
-      typeof message.action.y === "number" &&
-      Number.isFinite(message.action.y)
+    const action = message.action;
+    const kind = action.kind;
+    const tileId = action.tileId;
+    const x = action.x;
+    const y = action.y;
+    const rotation = action.rotation;
+    if (
+      kind === "drag-preview" &&
+      typeof tileId === "string" &&
+      typeof x === "number" &&
+      Number.isFinite(x) &&
+      Math.abs(x) <= MAX_POSITION_OFFSET &&
+      typeof y === "number" &&
+      Number.isFinite(y) &&
+      Math.abs(y) <= MAX_POSITION_OFFSET &&
+      typeof rotation === "number" &&
+      Number.isFinite(rotation) &&
+      Math.abs(rotation) <= MAX_TILE_ROTATION
     ) {
-      const tiles = moveTile(
-        current.tiles,
-        message.action.tileId,
-        playerId,
-        message.action.destination as MoveDestination,
-        message.action.x,
-        message.action.y,
+      const tile = current.tiles.find(
+        (candidate) =>
+          candidate.id === tileId && candidate.ownerId === playerId,
       );
-      commitHostState({ ...current, tiles });
-    } else {
+      if (!tile) return;
+      queuePeerDragPreview(channel, {
+        ...tile,
+        zone: "board",
+        x,
+        y,
+        rotation,
+      });
       return;
     }
-    broadcast();
+
+    if (
+      kind === "drag-end" &&
+      typeof tileId === "string" &&
+      current.tiles.some(
+        (tile) => tile.id === tileId && tile.ownerId === playerId,
+      )
+    ) {
+      cancelPendingPeerDragUpdate(channel);
+      endDragPreview(tileId, channel);
+      return;
+    }
+
+    if (kind === "draw") {
+      const viewportWidth = positiveDimension(
+        action.viewportWidth,
+        window.innerWidth,
+      );
+      const rackWidth = positiveDimension(action.rackWidth, window.innerWidth);
+      const rackHeight = positiveDimension(action.rackHeight, 108);
+      commitHostState({
+        ...current,
+        tiles: [
+          ...current.tiles,
+          createTile(
+            playerId,
+            current.tiles,
+            viewportWidth,
+            rackWidth,
+            rackHeight,
+          ),
+        ],
+      });
+      broadcast();
+      return;
+    }
+
+    const destination = action.destination;
+    if (
+      kind === "move" &&
+      typeof tileId === "string" &&
+      (destination === "hand" ||
+        destination === "board" ||
+        destination === "discard") &&
+      typeof x === "number" &&
+      Number.isFinite(x) &&
+      typeof y === "number" &&
+      Number.isFinite(y) &&
+      typeof rotation === "number" &&
+      Number.isFinite(rotation) &&
+      current.tiles.some(
+        (tile) => tile.id === tileId && tile.ownerId === playerId,
+      )
+    ) {
+      cancelPendingPeerDragUpdate(channel);
+      const tiles = moveTile(
+        current.tiles,
+        tileId,
+        playerId,
+        destination,
+        x,
+        y,
+        rotation,
+      );
+      commitHostState({ ...current, tiles });
+      clearDragPreview(tileId);
+      broadcast(tileId);
+    }
   };
 
   const handleGuestMessage = (data: unknown) => {
     const message = parseMessage(data);
-    if (!message || !isTableState(message.state)) return;
+    if (!message) return;
+    if (
+      message.type === "tile-preview" &&
+      isTile(message.tile) &&
+      message.tile.zone === "board"
+    ) {
+      updateRemoteDragPreview(message.tile.id, message.tile);
+      return;
+    }
+    if (
+      message.type === "tile-preview-end" &&
+      typeof message.tileId === "string"
+    ) {
+      updateRemoteDragPreview(message.tileId, null);
+      return;
+    }
+    if (!isTableState(message.state)) return;
     if (message.type === "welcome" && typeof message.playerId === "string") {
       myIdRef.current = message.playerId;
       setMyId(message.playerId);
       gameRef.current = message.state;
       setGame(message.state);
+      setRemoteDragPreviews({});
       setConnectionState("connected");
     } else if (message.type === "snapshot") {
       gameRef.current = message.state;
       setGame(message.state);
+      if (typeof message.finishedDragTileId === "string")
+        updateRemoteDragPreview(message.finishedDragTileId, null);
     }
   };
 
   const closeHostConnections = () => {
+    for (const channel of pendingPeerDragUpdatesRef.current.keys())
+      cancelPendingPeerDragUpdate(channel);
     for (const channel of hostChannelsRef.current.keys()) {
       channel.onclose = null;
       channel.close();
     }
     hostChannelsRef.current.clear();
+    activeDragOwnersRef.current.clear();
+    lastPeerDragUpdateAtRef.current.clear();
     for (const peer of hostPeersRef.current.values()) {
       peer.onconnectionstatechange = null;
       peer.close();
@@ -496,7 +835,10 @@ function App() {
         sendMessage(channel, { type: "hello", name: nameRef.current });
       };
       channel.onmessage = ({ data }) => handleGuestMessage(data);
-      channel.onclose = () => setConnectionState("disconnected");
+      channel.onclose = () => {
+        setConnectionState("disconnected");
+        setRemoteDragPreviews({});
+      };
     };
 
     try {
@@ -517,8 +859,34 @@ function App() {
       if (action.kind === "draw") {
         commitHostState({
           ...current,
-          tiles: [...current.tiles, createTile(myIdRef.current, current.tiles)],
+          tiles: [
+            ...current.tiles,
+            createTile(
+              myIdRef.current,
+              current.tiles,
+              window.innerWidth,
+              handRef.current?.clientWidth ?? window.innerWidth,
+              handRef.current?.clientHeight ?? 108,
+            ),
+          ],
         });
+        broadcast();
+      } else if (action.kind === "drag-preview") {
+        const tile = current.tiles.find(
+          (candidate) =>
+            candidate.id === action.tileId &&
+            candidate.ownerId === myIdRef.current,
+        );
+        if (tile)
+          broadcastDragPreview({
+            ...tile,
+            zone: "board",
+            x: action.x,
+            y: action.y,
+            rotation: action.rotation,
+          });
+      } else if (action.kind === "drag-end") {
+        endDragPreview(action.tileId);
       } else {
         commitHostState({
           ...current,
@@ -529,10 +897,12 @@ function App() {
             action.destination,
             action.x,
             action.y,
+            action.rotation,
           ),
         });
+        clearDragPreview(action.tileId);
+        broadcast(action.tileId);
       }
-      broadcast();
       return;
     }
 
@@ -544,18 +914,146 @@ function App() {
     sendMessage(channel, { type: "action", action });
   };
 
+  const cancelPendingDragPreview = (tileId?: string) => {
+    const pending = pendingDragUpdateRef.current;
+    if (!pending || (tileId && pending.tileId !== tileId)) return;
+    window.clearTimeout(pending.timer);
+    pendingDragUpdateRef.current = null;
+  };
+
+  const queueDragPreview = (
+    tileId: string,
+    x: number,
+    y: number,
+    rotation: number,
+    now: number,
+  ) => {
+    const send = (update: PendingDragUpdate, sentAt: number) => {
+      lastDragUpdateAtRef.current = sentAt;
+      performAction({
+        kind: "drag-preview",
+        tileId: update.tileId,
+        x: update.x,
+        y: update.y,
+        rotation: update.rotation,
+      });
+    };
+    const schedule = (pending: PendingDragUpdate, delay: number) => {
+      pending.timer = window.setTimeout(
+        () => {
+          if (pendingDragUpdateRef.current !== pending) return;
+          const current = dragRef.current;
+          const table = tableRef.current;
+          if (
+            !current ||
+            current.tileId !== pending.tileId ||
+            current.destination !== "board" ||
+            !table
+          ) {
+            pendingDragUpdateRef.current = null;
+            return;
+          }
+          const center = projectDragCenter(current);
+          const position = positionIn(table, center.x, center.y);
+          pending.x = position.x;
+          pending.y = position.y;
+          pending.rotation = current.rotation;
+          const sentAt = monotonicNow();
+          if (!canSendDragUpdate(sentAt, lastDragUpdateAtRef.current)) {
+            schedule(
+              pending,
+              lastDragUpdateAtRef.current + DRAG_UPDATE_INTERVAL_MS - sentAt,
+            );
+            return;
+          }
+          send(pending, sentAt);
+          if (!current.sharedPreview) {
+            const next = { ...current, sharedPreview: true };
+            dragRef.current = next;
+            setDrag(next);
+          }
+          schedule(pending, DRAG_UPDATE_INTERVAL_MS);
+        },
+        Math.max(0, delay),
+      );
+    };
+
+    if (canSendDragUpdate(now, lastDragUpdateAtRef.current)) {
+      cancelPendingDragPreview();
+      const pending = { tileId, x, y, rotation, timer: 0 };
+      pendingDragUpdateRef.current = pending;
+      send(pending, now);
+      schedule(pending, DRAG_UPDATE_INTERVAL_MS);
+      return true;
+    }
+
+    let pending = pendingDragUpdateRef.current;
+    if (pending?.tileId !== tileId) {
+      cancelPendingDragPreview();
+      pending = { tileId, x, y, rotation, timer: 0 };
+      pendingDragUpdateRef.current = pending;
+      schedule(
+        pending,
+        lastDragUpdateAtRef.current + DRAG_UPDATE_INTERVAL_MS - now,
+      );
+    } else {
+      pending.x = x;
+      pending.y = y;
+      pending.rotation = rotation;
+    }
+    return false;
+  };
+
   const startDrag = (event: PointerEvent<HTMLButtonElement>, tile: Tile) => {
     if (tile.ownerId !== myIdRef.current || event.button !== 0) return;
+    cancelPendingDragPreview();
     event.preventDefault();
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const next = {
+    const element = event.currentTarget;
+    const bounds = element.getBoundingClientRect();
+    const width = element.offsetWidth;
+    const height = element.offsetHeight;
+    const radians = (tile.rotation * Math.PI) / 180;
+    const deltaX = event.clientX - (bounds.left + bounds.width / 2);
+    const deltaY = event.clientY - (bounds.top + bounds.height / 2);
+    const offsetX = Math.max(
+      0,
+      Math.min(
+        width,
+        width / 2 + deltaX * Math.cos(radians) + deltaY * Math.sin(radians),
+      ),
+    );
+    const offsetY = Math.max(
+      0,
+      Math.min(
+        height,
+        height / 2 - deltaX * Math.sin(radians) + deltaY * Math.cos(radians),
+      ),
+    );
+    const next: DragState = {
       tileId: tile.id,
       pointerId: event.pointerId,
       clientX: event.clientX,
       clientY: event.clientY,
-      offsetX: event.clientX - bounds.left,
-      offsetY: event.clientY - bounds.top,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      offsetX,
+      offsetY,
+      width,
+      height,
+      startRotation: tile.rotation,
+      rotation: tile.rotation,
+      angularVelocity: 0,
+      destination: tile.zone,
+      previewCenter: null,
+      sharedPreview: false,
     };
+    const previewArea =
+      tile.zone === "board" ? tableRef.current : handRef.current;
+    if (previewArea) {
+      const center = projectDragCenter(next);
+      const position = positionIn(previewArea, center.x, center.y);
+      next.previewCenter = { x: position.centerX, y: position.centerY };
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = next;
     setDrag(next);
@@ -569,7 +1067,58 @@ function App() {
       current.pointerId !== event.pointerId
     )
       return;
-    const next = { ...current, clientX: event.clientX, clientY: event.clientY };
+    const deltaX = event.clientX - current.clientX;
+    const deltaY = event.clientY - current.clientY;
+    const angularVelocity = addTileDragImpulse({
+      rotation: current.rotation,
+      angularVelocity: current.angularVelocity,
+      deltaX,
+      deltaY,
+      grabX: current.offsetX,
+      grabY: current.offsetY,
+      width: current.width,
+      height: current.height,
+    });
+    const destination = dragDestination(event.clientX, event.clientY);
+    const next: DragState = {
+      ...current,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      angularVelocity,
+      destination,
+      previewCenter: null,
+    };
+    const previewArea =
+      destination === "board"
+        ? tableRef.current
+        : destination === "hand"
+          ? handRef.current
+          : null;
+    let sharedPosition: { x: number; y: number } | null = null;
+    if (previewArea) {
+      const center = projectDragCenter(next);
+      const position = positionIn(previewArea, center.x, center.y);
+      next.previewCenter = { x: position.centerX, y: position.centerY };
+      if (destination === "board") sharedPosition = position;
+    }
+    if (destination === "board" && sharedPosition) {
+      if (
+        queueDragPreview(
+          tile.id,
+          sharedPosition.x,
+          sharedPosition.y,
+          next.rotation,
+          event.timeStamp,
+        )
+      )
+        next.sharedPreview = true;
+    } else {
+      cancelPendingDragPreview(tile.id);
+      if (current.sharedPreview) {
+        performAction({ kind: "drag-end", tileId: tile.id });
+        next.sharedPreview = false;
+      }
+    }
     dragRef.current = next;
     setDrag(next);
   };
@@ -582,47 +1131,60 @@ function App() {
       current.pointerId !== event.pointerId
     )
       return;
+    cancelPendingDragPreview(tile.id);
     dragRef.current = null;
     setDrag(null);
+    if (
+      event.clientX === current.startClientX &&
+      event.clientY === current.startClientY &&
+      Math.abs(current.rotation - current.startRotation) < 0.001 &&
+      Math.abs(current.angularVelocity) < 0.001
+    ) {
+      if (current.sharedPreview)
+        performAction({ kind: "drag-end", tileId: tile.id });
+      return;
+    }
 
-    if (pointInside(discardRef.current, event.clientX, event.clientY)) {
+    const destination = dragDestination(event.clientX, event.clientY);
+    const rotation = current.rotation;
+    const center = projectDragCenter(
+      current,
+      event.clientX,
+      event.clientY,
+      rotation,
+    );
+
+    if (destination === "discard") {
       performAction({
         kind: "move",
         tileId: tile.id,
         destination: "discard",
         x: 0,
         y: 0,
+        rotation,
       });
-    } else if (
-      pointInside(tableRef.current, event.clientX, event.clientY) &&
-      tableRef.current
-    ) {
-      const position = positionIn(
-        tableRef.current,
-        event.clientX,
-        event.clientY,
-      );
+    } else if (destination === "board" && tableRef.current) {
+      const { x, y } = positionIn(tableRef.current, center.x, center.y);
       performAction({
         kind: "move",
         tileId: tile.id,
         destination: "board",
-        ...position,
+        x,
+        y,
+        rotation,
       });
-    } else if (
-      pointInside(handRef.current, event.clientX, event.clientY) &&
-      handRef.current
-    ) {
-      const position = positionIn(
-        handRef.current,
-        event.clientX,
-        event.clientY,
-      );
+    } else if (destination === "hand" && handRef.current) {
+      const { x, y } = positionIn(handRef.current, center.x, center.y);
       performAction({
         kind: "move",
         tileId: tile.id,
         destination: "hand",
-        ...position,
+        x,
+        y,
+        rotation,
       });
+    } else if (current.sharedPreview) {
+      performAction({ kind: "drag-end", tileId: tile.id });
     }
   };
 
@@ -640,6 +1202,7 @@ function App() {
         destination,
         x: tile.x,
         y: tile.y,
+        rotation: tile.rotation,
       });
     } else if (event.key === "Backspace" || event.key === "Delete") {
       event.preventDefault();
@@ -649,6 +1212,7 @@ function App() {
         destination: "discard",
         x: 0,
         y: 0,
+        rotation: tile.rotation,
       });
     } else if (event.key.startsWith("Arrow")) {
       event.preventDefault();
@@ -673,26 +1237,33 @@ function App() {
         destination: tile.zone,
         x,
         y,
+        rotation: tile.rotation,
       });
     }
   };
 
-  const renderTile = (tile: Tile) => {
+  const renderTile = (tile: Tile, isRemotePreview = false) => {
     const owner = game.players.find((player) => player.id === tile.ownerId);
     const isDragging = drag?.tileId === tile.id;
     const isBlank = tile.face === "?";
     const style = isDragging
       ? {
           left: drag.clientX - drag.offsetX,
-          top: drag.clientY - drag.offsetY,
+          top: drag.clientY - drag.offsetY - DRAG_LIFT,
+          transformOrigin: `${drag.offsetX}px ${drag.offsetY}px`,
+          transform: `rotate(${drag.rotation}deg)`,
         }
-      : { left: `${tile.x}%`, top: `${tile.y}%` };
+      : {
+          left: `calc(50% ${tile.x < 0 ? "-" : "+"} ${Math.abs(tile.x)}px)`,
+          top: `calc(50% ${tile.y < 0 ? "-" : "+"} ${Math.abs(tile.y)}px)`,
+          transform: `translate(-50%, -50%) rotate(${tile.rotation}deg)`,
+        };
 
     return (
       <button
         key={tile.id}
         type="button"
-        className={`scrabble-tile ${tile.zone === "board" ? "public-tile" : "private-tile"}${isDragging ? " is-dragging" : ""}`}
+        className={`scrabble-tile ${tile.zone === "board" ? "public-tile" : "private-tile"}${isDragging ? " is-dragging" : ""}${isRemotePreview ? " remote-drag-preview" : ""}`}
         style={style}
         aria-label={`${isBlank ? "Blank" : tile.face} tile, ${tile.points} points. ${
           owner?.name ?? "Player"
@@ -702,6 +1273,12 @@ function App() {
         onPointerMove={(event) => moveDrag(event, tile)}
         onPointerUp={(event) => finishDrag(event, tile)}
         onPointerCancel={() => {
+          cancelPendingDragPreview(tile.id);
+          if (
+            dragRef.current?.tileId === tile.id &&
+            dragRef.current.sharedPreview
+          )
+            performAction({ kind: "drag-end", tileId: tile.id });
           dragRef.current = null;
           setDrag(null);
         }}
@@ -751,6 +1328,7 @@ function App() {
     (tile) => tile.ownerId === myId && tile.zone === "hand",
   );
   const publicTiles = game.tiles.filter((tile) => tile.zone === "board");
+  const dropPreview = drag?.previewCenter ?? null;
 
   return (
     <main className="app-shell">
@@ -840,10 +1418,36 @@ function App() {
           <span className="caption-rule" />
         </div>
 
+        <div className="public-play-area" ref={tableRef}>
+          {publicTiles
+            .filter((tile) => !remoteDragPreviews[tile.id])
+            .map((tile) => renderTile(tile))}
+          {Object.values(remoteDragPreviews).map((tile) =>
+            renderTile(tile, true),
+          )}
+        </div>
+
+        <div className="felt-stamp" aria-hidden="true">
+          WORDHAVEN <span className="stamp-separator">·</span> EST. YOUR TABLE
+        </div>
+      </section>
+
+      <div className="wood-rail" aria-hidden="true">
+        <span className="rail-inlay" />
+      </div>
+
+      <div className="private-rack-layout">
         <button
           className="draw-station"
           type="button"
-          onClick={() => performAction({ kind: "draw" })}
+          onClick={() =>
+            performAction({
+              kind: "draw",
+              viewportWidth: window.innerWidth,
+              rackWidth: handRef.current?.clientWidth ?? window.innerWidth,
+              rackHeight: handRef.current?.clientHeight ?? 108,
+            })
+          }
           disabled={!canPlay}
           aria-label="Draw one random tile from the infinite bag"
           title="Draw one tile"
@@ -861,9 +1465,28 @@ function App() {
           <span className="bag-infinite">∞ INFINITE BAG</span>
         </button>
 
-        <div className="public-play-area" ref={tableRef}>
-          {publicTiles.map(renderTile)}
-        </div>
+        <section className="private-area" aria-label="Your private tile area">
+          <div className="rack-heading">
+            <div>
+              <span className="rack-title">YOUR RACK</span>
+              <span className="rack-hint">
+                Only you can see these tiles · drag them onto the table to share
+              </span>
+            </div>
+            <span className="rack-count">
+              {ownTiles.length} {ownTiles.length === 1 ? "tile" : "tiles"}
+            </span>
+          </div>
+          <div className="hand-space" ref={handRef}>
+            {ownTiles.length === 0 ? (
+              <p className="empty-rack">
+                Draw a tile from the bag to get started
+              </p>
+            ) : (
+              ownTiles.map((tile) => renderTile(tile))
+            )}
+          </div>
+        </section>
 
         <div
           className="discard-zone"
@@ -876,38 +1499,19 @@ function App() {
           <span className="discard-label">DISCARD</span>
           <small>drop tile here</small>
         </div>
-
-        <div className="felt-stamp" aria-hidden="true">
-          WORDHAVEN <span className="stamp-separator">·</span> EST. YOUR TABLE
-        </div>
-      </section>
-
-      <div className="wood-rail" aria-hidden="true">
-        <span className="rail-inlay" />
       </div>
 
-      <section className="private-area" aria-label="Your private tile area">
-        <div className="rack-heading">
-          <div>
-            <span className="rack-title">YOUR RACK</span>
-            <span className="rack-hint">
-              Only you can see these tiles · drag them onto the table to share
-            </span>
-          </div>
-          <span className="rack-count">
-            {ownTiles.length} {ownTiles.length === 1 ? "tile" : "tiles"}
-          </span>
-        </div>
-        <div className="hand-space" ref={handRef}>
-          {ownTiles.length === 0 ? (
-            <p className="empty-rack">
-              Draw a tile from the bag to get started
-            </p>
-          ) : (
-            ownTiles.map(renderTile)
-          )}
-        </div>
-      </section>
+      {drag && dropPreview && (
+        <div
+          className="tile-drop-shadow"
+          aria-hidden="true"
+          style={{
+            left: dropPreview.x,
+            top: dropPreview.y,
+            transform: `translate(-50%, -50%) rotate(${drag.rotation}deg)`,
+          }}
+        />
+      )}
 
       {(error || notice) && (
         <div
