@@ -5,6 +5,7 @@ import {
   canSendDragUpdate,
   createTile,
   drawTileFace,
+  findRackPosition,
   moveTile,
   projectedTileCenter,
   stepTileSwing,
@@ -120,7 +121,46 @@ test("drag impulses stay small and swing around arbitrary pickup points", () => 
   assert.equal(centered, 0);
 });
 
-test("spawns random-rotated tiles across centered viewport span without overlap", () => {
+test("starts rack placement at the center", () => {
+  assert.deepEqual(
+    findRackPosition([], "player-a", 0, 980, 920, 205, () => 0),
+    { x: 0, y: 0 },
+  );
+});
+
+test("searches outwards from the center for available space", () => {
+  const existing = { ...tile, x: 0, y: 0 };
+  const position = findRackPosition(
+    [existing],
+    "player-a",
+    0,
+    980,
+    920,
+    205,
+    () => 0,
+  );
+
+  assert.ok(position.x > 55 && position.x < 100);
+  assert.equal(position.y, 0);
+});
+
+test("fallback chooses the shallowest tile overlap", () => {
+  const existing = { ...tile, x: 0, y: 0 };
+  const position = findRackPosition(
+    [existing],
+    "player-a",
+    0,
+    980,
+    157,
+    68,
+    () => 0.5,
+  );
+
+  assert.ok(position.x > 40);
+  assert.equal(position.y, 0);
+});
+
+test("drawn tiles start centered and expand outwards without overlap", () => {
   const randomSequence = (...values) => {
     let index = 0;
     return () => values[index++] ?? 0.5;
@@ -131,7 +171,7 @@ test("spawns random-rotated tiles across centered viewport span without overlap"
     764,
     708,
     108,
-    randomSequence(0, 0.5, 0),
+    randomSequence(0, 0.5),
   );
   const second = createTile(
     "player-a",
@@ -139,34 +179,16 @@ test("spawns random-rotated tiles across centered viewport span without overlap"
     764,
     708,
     108,
-    randomSequence(0, 0.99, 0),
+    randomSequence(0, 0.5, 0),
   );
 
   assert.equal(first.face, "A");
   assert.equal(first.rotation, 0);
-  assert.equal(second.rotation, 4.9);
-  assert.ok(Math.abs(first.rotation) <= 5);
-  assert.ok(Math.abs(second.rotation) <= 5);
-  assert.equal(first.x, -300);
-  assert.equal(second.x, 0);
-  assert.ok(Math.abs(first.x) <= 300);
-  assert.ok(Math.abs(second.x) <= 300);
-  assert.ok(Math.abs(first.y) <= 20);
-  assert.ok(Math.abs(second.y) <= 20);
-  const continuous = createTile(
-    "player-a",
-    [],
-    764,
-    708,
-    108,
-    randomSequence(0, 0.5, 0.25, 0.75),
-  );
-  assert.equal(continuous.x, -150);
-  assert.equal(continuous.y, 10);
-  assert.equal(
-    createTile("player-a", [], 2400, 2344, 180, randomSequence(0, 0.5, 0)).x,
-    -400,
-  );
+  assert.equal(second.rotation, 0);
+  assert.ok(Math.abs(first.x) < 1e-10);
+  assert.ok(Math.abs(first.y) < 1e-10);
+  assert.ok(second.x < -57);
+  assert.ok(Math.abs(second.y) < 1e-10);
 });
 
 test("draws from the standard 100-tile distribution", () => {
@@ -202,6 +224,16 @@ test("players receive only their private tiles and shared tiles", () => {
   assert.deepEqual(
     snapshotForPlayer(state, "player-a").tiles.map(({ id }) => id),
     ["one", "public"],
+  );
+});
+
+test("moving a tile raises it above tiles already placed", () => {
+  const laterTile = { ...tile, id: "two", ownerId: "player-b", zone: "board" };
+  const moved = moveTile([tile, laterTile], "one", "player-a", "board", 50, 50);
+
+  assert.deepEqual(
+    moved.map(({ id }) => id),
+    ["two", "one"],
   );
 });
 

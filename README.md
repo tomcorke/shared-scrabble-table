@@ -1,6 +1,6 @@
-# Wordhaven
+# Shared Scrabble Table
 
-Wordhaven is a shared Scrabble table that runs in the browser. Players connect directly with WebRTC, draw from an infinite bag, keep private tiles in their rack, and place shared tiles on the felt table.
+A shared Scrabble table that runs in the browser. Players connect directly with WebRTC, draw from an infinite bag, keep private tiles in their rack, and place shared tiles on the felt table.
 
 Live site: [spell.corke.dev](https://spell.corke.dev).
 
@@ -13,7 +13,7 @@ pnpm install
 pnpm dev
 ```
 
-Open the app in a browser. The first player hosts the table. Select **Invite players**, copy an offer, and send it to another player. They choose **Join a table**, paste the offer, create an answer, and send it back. Paste their answer into the matching invite on the host page. Keep both pages open while you play.
+Open the app in a browser. The first player hosts the table. Select **Invite someone to play**, create an invite, and send its code to another player. They select **Join another table**, paste the code, and create an answer. Send the answer back to the host, who pastes it into the matching invite. The join dialog closes when the host connects. Keep both pages open while you play.
 
 Session JSON moves by copy and paste. The app does not use a signalling server or store games. The host browser coordinates the table; if it closes, the session ends. Each guest receives their own rack and the shared tiles, not other players' private tile faces.
 

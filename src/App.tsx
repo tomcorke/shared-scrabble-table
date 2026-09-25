@@ -682,6 +682,7 @@ function App() {
       setGame(message.state);
       setRemoteDragPreviews({});
       setConnectionState("connected");
+      setSetupOpen(false);
     } else if (message.type === "snapshot") {
       gameRef.current = message.state;
       setGame(message.state);
@@ -707,15 +708,26 @@ function App() {
     hostPeersRef.current.clear();
   };
 
+  const closeGuestConnection = () => {
+    const channel = guestChannelRef.current;
+    if (channel) {
+      channel.onclose = null;
+      channel.close();
+      guestChannelRef.current = null;
+    }
+    const peer = guestPeerRef.current;
+    if (peer) {
+      peer.onconnectionstatechange = null;
+      peer.ondatachannel = null;
+      peer.close();
+      guestPeerRef.current = null;
+    }
+  };
+
   useEffect(
     () => () => {
       closeHostConnections();
-      const channel = guestChannelRef.current;
-      if (channel) {
-        channel.onclose = null;
-        channel.close();
-      }
-      guestPeerRef.current?.close();
+      closeGuestConnection();
     },
     [],
   );
@@ -801,7 +813,7 @@ function App() {
     if (description.type !== "offer") throw new Error("Paste an offer here");
     savePlayerName();
     closeHostConnections();
-    guestChannelRef.current?.close();
+    closeGuestConnection();
     roleRef.current = "guest";
     setRole("guest");
     setSetupTab("join");
@@ -851,6 +863,16 @@ function App() {
       guestPeerRef.current = null;
       throw caught;
     }
+  };
+
+  const resetJoin = () => {
+    closeGuestConnection();
+    setRemoteOffer("");
+    setLocalAnswer("");
+    setConnectionState("idle");
+    setRemoteDragPreviews({});
+    setError("");
+    setNotice("");
   };
 
   const performAction = (action: Action) => {
@@ -1311,6 +1333,10 @@ function App() {
     setNotice(`${label} copied`);
   };
 
+  const canJoinAnotherTable =
+    (role === "host" && game.players.length === 1 && invites.length === 0) ||
+    (role === "guest" &&
+      ["idle", "failed", "disconnected", "closed"].includes(connectionState));
   const connectionLabel =
     role === "guest"
       ? connectionState === "connected"
@@ -1333,14 +1359,8 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div className="brand-lockup">
-          <span className="brand-mark" aria-hidden="true">
-            W
-          </span>
-          <div>
-            <h1>Wordhaven</h1>
-            <p>the shared scrabble table</p>
-          </div>
+        <div className="app-title">
+          <h1>Shared Scrabble Table</h1>
         </div>
         <div className="topbar-actions">
           <span
@@ -1355,12 +1375,18 @@ function App() {
             onClick={() => {
               setError("");
               setNotice("");
-              setSetupTab(role === "host" ? "host" : "join");
+              setSetupTab(
+                canJoinAnotherTable || role === "guest" ? "join" : "host",
+              );
               setSetupOpen(true);
             }}
           >
             <span aria-hidden="true">↗</span>{" "}
-            {role === "host" ? "Invite players" : "Connection"}
+            {canJoinAnotherTable
+              ? "Join another table"
+              : role === "host"
+                ? "Invite players"
+                : "Connection"}
           </button>
         </div>
       </header>
@@ -1400,7 +1426,10 @@ function App() {
             <button
               className="waiting-player"
               type="button"
-              onClick={() => setSetupOpen(true)}
+              onClick={() => {
+                setSetupTab("host");
+                setSetupOpen(true);
+              }}
             >
               <span>＋</span> Invite someone to play
             </button>
@@ -1425,10 +1454,6 @@ function App() {
           {Object.values(remoteDragPreviews).map((tile) =>
             renderTile(tile, true),
           )}
-        </div>
-
-        <div className="felt-stamp" aria-hidden="true">
-          WORDHAVEN <span className="stamp-separator">·</span> EST. YOUR TABLE
         </div>
       </section>
 
@@ -1542,8 +1567,7 @@ function App() {
           >
             <header className="dialog-header">
               <div>
-                <p className="dialog-eyebrow">A TABLE FOR EVERYONE</p>
-                <h2 id="setup-title">Bring your people in</h2>
+                <h2 id="setup-title">Connect to a table</h2>
                 <p>
                   Connect directly between browsers. No account or server
                   needed.
@@ -1622,19 +1646,25 @@ function App() {
                           {invite.status}
                         </span>
                       </div>
-                      <label>
-                        Send this offer to your friend
-                        <textarea readOnly rows={3} value={invite.offer} />
-                      </label>
-                      <button
-                        className="secondary-action"
-                        type="button"
-                        onClick={() =>
-                          void attempt(() => copyText(invite.offer, "Invite"))
-                        }
+                      <details
+                        className="invite-offer"
+                        open={invite.status !== "connected"}
                       >
-                        Copy invite
-                      </button>
+                        <summary>Invite code</summary>
+                        <label>
+                          Send this offer to your friend
+                          <textarea readOnly rows={3} value={invite.offer} />
+                        </label>
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          onClick={() =>
+                            void attempt(() => copyText(invite.offer, "Invite"))
+                          }
+                        >
+                          Copy invite
+                        </button>
+                      </details>
                       {invite.status !== "connected" && (
                         <>
                           <label>
@@ -1670,12 +1700,24 @@ function App() {
               </div>
             ) : (
               <div className="join-panel">
-                {role === "guest" && localAnswer ? (
+                <p className="setup-instructions">
+                  {localAnswer
+                    ? "Send the answer code below to the table host. Keep this page open while they connect you."
+                    : "Paste the invite code from the table host. Your connection is direct and peer-to-peer."}
+                </p>
+                <label>
+                  Host invite code
+                  <textarea
+                    rows={5}
+                    value={remoteOffer}
+                    readOnly={Boolean(localAnswer)}
+                    onChange={(event) => setRemoteOffer(event.target.value)}
+                    spellCheck={false}
+                    placeholder="Paste invite code"
+                  />
+                </label>
+                {localAnswer ? (
                   <>
-                    <p className="setup-instructions">
-                      Send this answer code to the table host. Keep this page
-                      open while they connect you.
-                    </p>
                     <label>
                       Your answer code
                       <textarea readOnly rows={5} value={localAnswer} />
@@ -1697,32 +1739,25 @@ function App() {
                         ? "You are at the table"
                         : "Waiting for the host to apply your answer"}
                     </p>
+                    {connectionState !== "connected" && (
+                      <button
+                        className="secondary-action"
+                        type="button"
+                        onClick={resetJoin}
+                      >
+                        Start over
+                      </button>
+                    )}
                   </>
                 ) : (
-                  <>
-                    <p className="setup-instructions">
-                      Paste the invite code from the table host. Your connection
-                      is direct and peer-to-peer.
-                    </p>
-                    <label>
-                      Host invite code
-                      <textarea
-                        rows={5}
-                        value={remoteOffer}
-                        onChange={(event) => setRemoteOffer(event.target.value)}
-                        spellCheck={false}
-                        placeholder="Paste invite code"
-                      />
-                    </label>
-                    <button
-                      className="primary-action"
-                      type="button"
-                      disabled={!remoteOffer.trim()}
-                      onClick={() => void attempt(createAnswer)}
-                    >
-                      Create answer
-                    </button>
-                  </>
+                  <button
+                    className="primary-action"
+                    type="button"
+                    disabled={!remoteOffer.trim()}
+                    onClick={() => void attempt(createAnswer)}
+                  >
+                    Create answer
+                  </button>
                 )}
               </div>
             )}
