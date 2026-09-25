@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint && stylelint \"src/**/*.css\"",
+    "lint": "oxlint && eslint . && stylelint \"src/**/*.css\" && node scripts/check-source-size.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "format": "prettier --write .",
@@ -23,7 +23,10 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "@typescript-eslint/parser": "^8.70.1",
     "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^9.39.5",
+    "eslint-plugin-sonarjs": "^4.2.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "oxlint": "^1.81.0",
@@ -37,8 +40,15 @@
     "node": ">=22.12"
   },
   "lint-staged": {
-    "*.{ts,tsx}": "oxlint --fix",
-    "*.css": "stylelint --fix",
-    "*.{ts,tsx,css,json,md,yaml,yml}": "prettier --write"
+    "*.{ts,tsx}": [
+      "oxlint --fix",
+      "eslint",
+      "prettier --write"
+    ],
+    "*.css": [
+      "stylelint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yaml,yml}": "prettier --write"
   }
 }
