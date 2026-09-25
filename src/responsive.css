@@ -1,0 +1,197 @@
+@media (width <= 700px) {
+  .topbar {
+    min-height: 58px;
+    padding: 0 14px;
+  }
+
+  .app-title h1 {
+    font-size: 17px;
+  }
+
+  .topbar-actions {
+    gap: 10px;
+  }
+
+  .connection-pill {
+    max-width: 108px;
+    font-size: 9px;
+  }
+
+  .invite-button {
+    min-height: 34px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+
+  .player-strip {
+    min-height: 58px;
+    gap: 9px;
+    padding: 7px 12px;
+  }
+
+  .player-strip-label {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+  }
+
+  .player-card {
+    min-width: 126px;
+    height: 38px;
+  }
+
+  .player-strip-note {
+    display: none;
+  }
+
+  .public-play-area {
+    inset: 38px 14px 28px;
+  }
+
+  .draw-station {
+    width: 92px;
+    flex-basis: 92px;
+  }
+
+  .bag-illustration {
+    width: 45px;
+    height: 54px;
+  }
+
+  .bag-illustration svg {
+    width: 45px;
+    height: 54px;
+  }
+
+  .bag-label {
+    font-size: 8px;
+  }
+
+  .bag-infinite {
+    font-size: 6px;
+  }
+
+  .discard-zone {
+    width: 92px;
+    flex-basis: 92px;
+  }
+
+  .discard-label {
+    font-size: 8px;
+  }
+
+  .discard-zone small {
+    font-size: 8px;
+  }
+
+  .discard-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 20px;
+  }
+
+  .private-rack-layout {
+    height: 23vh;
+    min-height: 125px;
+    gap: 8px;
+    padding: 0;
+  }
+
+  .private-area {
+    padding: 8px 0 5px;
+  }
+
+  .rack-heading > div {
+    gap: 8px;
+  }
+
+  .rack-hint {
+    max-width: 190px;
+    overflow: hidden;
+    font-size: 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rack-title,
+  .rack-count {
+    font-size: 8px;
+  }
+
+  .empty-rack {
+    font-size: 12px;
+  }
+
+  .scrabble-tile,
+  .tile-drop-shadow {
+    width: 40px;
+    height: 50px;
+  }
+
+  .tile-face {
+    font-size: 23px;
+  }
+
+  .tile-points {
+    right: 4px;
+    bottom: 3px;
+    font-size: 9px;
+  }
+}
+
+@media (width <= 420px) {
+  .topbar {
+    padding: 0 9px;
+  }
+
+  .app-title h1 {
+    font-size: 13px;
+  }
+
+  .connection-pill {
+    max-width: 80px;
+    gap: 5px;
+    line-height: 1.2;
+  }
+
+  .invite-button {
+    gap: 4px;
+    padding: 0 7px;
+  }
+
+  .player-strip {
+    padding: 7px 8px;
+  }
+
+  .player-strip-label {
+    max-width: 43px;
+    line-height: 1.3;
+  }
+
+  .player-card {
+    min-width: 117px;
+    gap: 6px;
+    padding-right: 7px;
+  }
+
+  .draw-station {
+    width: 78px;
+    flex-basis: 78px;
+  }
+
+  .discard-zone {
+    width: 78px;
+    flex-basis: 78px;
+  }
+
+  .rack-hint {
+    max-width: 125px;
+  }
+
+  .setup-dialog {
+    padding: 19px;
+  }
+
+  .dialog-header h2 {
+    font-size: 22px;
+  }
+}

@@ -1,3 +1,6 @@
+import { findRackPosition } from "./rack-position.ts";
+export { findRackPosition };
+
 export const TILE_DISTRIBUTION = {
   A: 9,
   B: 2,
@@ -99,136 +102,7 @@ export function drawTileFace(random = Math.random): string {
   return "?";
 }
 
-const TILE_WIDTH = 55;
-const TILE_HEIGHT = 66;
 export const MAX_POSITION_OFFSET = 10_000;
-
-function rackTileOverlapDepth(
-  position: { x: number; y: number },
-  rotation: number,
-  tile: Tile,
-) {
-  const radians = (rotation * Math.PI) / 180;
-  const otherRadians = (tile.rotation * Math.PI) / 180;
-  const axes = [
-    { x: Math.cos(radians), y: Math.sin(radians) },
-    { x: -Math.sin(radians), y: Math.cos(radians) },
-    { x: Math.cos(otherRadians), y: Math.sin(otherRadians) },
-    { x: -Math.sin(otherRadians), y: Math.cos(otherRadians) },
-  ];
-  const deltaX = position.x - tile.x;
-  const deltaY = position.y - tile.y;
-
-  let overlapDepth = Infinity;
-  for (const axis of axes) {
-    const distance = Math.abs(deltaX * axis.x + deltaY * axis.y);
-    const radius = (angle: number) => {
-      const cosine = Math.cos(angle);
-      const sine = Math.sin(angle);
-      return (
-        (TILE_WIDTH / 2 + 1) * Math.abs(cosine * axis.x + sine * axis.y) +
-        (TILE_HEIGHT / 2 + 1) * Math.abs(-sine * axis.x + cosine * axis.y)
-      );
-    };
-    const overlap = radius(radians) + radius(otherRadians) - distance;
-    if (overlap <= 0) return 0;
-    overlapDepth = Math.min(overlapDepth, overlap);
-  }
-  return overlapDepth;
-}
-
-// ponytail: coarse center-out rings then least-penetration fallback; use finer packing if dense racks still collide.
-export function findRackPosition(
-  tiles: Tile[],
-  ownerId: string,
-  rotation: number,
-  viewportWidth: number,
-  rackWidth: number,
-  rackHeight: number,
-  random = Math.random,
-) {
-  const rackTiles = tiles.filter(
-    (tile) => tile.ownerId === ownerId && tile.zone === "hand",
-  );
-  const radians = (rotation * Math.PI) / 180;
-  const cosine = Math.abs(Math.cos(radians));
-  const sine = Math.abs(Math.sin(radians));
-  const halfWidth = (TILE_WIDTH * cosine + TILE_HEIGHT * sine) / 2 + 1;
-  const halfHeight = (TILE_WIDTH * sine + TILE_HEIGHT * cosine) / 2 + 1;
-  const horizontalSpan = Math.min(
-    viewportWidth,
-    Math.max(0, rackWidth - halfWidth * 2),
-  );
-  const verticalSpan = Math.max(0, rackHeight - halfHeight * 2);
-  let bestPosition = { x: 0, y: 0 };
-  let bestPenetration = Infinity;
-  const consider = (position: { x: number; y: number }) => {
-    const penetration = rackTiles.reduce(
-      (total, tile) => total + rackTileOverlapDepth(position, rotation, tile),
-      0,
-    );
-    if (penetration === 0) return true;
-    if (penetration < bestPenetration) {
-      bestPosition = position;
-      bestPenetration = penetration;
-    }
-    return false;
-  };
-  const horizontalRadius = horizontalSpan / 2;
-  const verticalRadius = verticalSpan / 2;
-  const radialStep = TILE_WIDTH / 3;
-
-  if (horizontalRadius === 0 || verticalRadius === 0) {
-    const maxRadius = Math.max(horizontalRadius, verticalRadius);
-    for (let ring = 0; ring <= Math.ceil(maxRadius / radialStep); ring++) {
-      const baseRadius = Math.min(maxRadius, ring * radialStep);
-      const radius =
-        ring === 0 || baseRadius === maxRadius
-          ? baseRadius
-          : baseRadius + (random() - 0.5) * radialStep * 0.4;
-      const directions =
-        radius === 0 ? [1] : random() < 0.5 ? [-1, 1] : [1, -1];
-      for (const direction of directions) {
-        const position =
-          horizontalRadius === 0
-            ? { x: 0, y: direction * radius }
-            : { x: direction * radius, y: 0 };
-        if (consider(position)) return position;
-      }
-    }
-    return bestPosition;
-  }
-
-  const maxRadius = Math.hypot(horizontalRadius, verticalRadius);
-  for (let ring = 0; ring <= Math.ceil(maxRadius / radialStep); ring++) {
-    const baseRadius = Math.min(maxRadius, ring * radialStep);
-    const radius =
-      ring === 0 || baseRadius === maxRadius
-        ? baseRadius
-        : baseRadius + (random() - 0.5) * radialStep * 0.4;
-    const pointCount =
-      radius === 0
-        ? 1
-        : Math.max(6, Math.ceil((2 * Math.PI * radius) / (TILE_WIDTH / 2)));
-    const phase = random() * 2 * Math.PI;
-
-    for (let point = 0; point < pointCount; point++) {
-      const angle = phase + (point * 2 * Math.PI) / pointCount;
-      const position = {
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-      };
-      if (
-        Math.abs(position.x) > horizontalRadius ||
-        Math.abs(position.y) > verticalRadius
-      )
-        continue;
-      if (consider(position)) return position;
-    }
-  }
-
-  return bestPosition;
-}
 
 export function createTile(
   ownerId: string,

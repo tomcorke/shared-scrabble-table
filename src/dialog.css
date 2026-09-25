@@ -1,0 +1,256 @@
+.toast {
+  position: fixed;
+  z-index: 30;
+  right: 22px;
+  bottom: 22px;
+  display: flex;
+  max-width: min(420px, calc(100vw - 32px));
+  align-items: center;
+  gap: 16px;
+  padding: 11px 14px;
+  border: 1px solid #d6c9aa;
+  border-radius: 7px;
+  color: #344a3b;
+  background: #fff9e9;
+  box-shadow: 0 5px 18px rgb(0 0 0 / 22%);
+  font-size: 12px;
+}
+
+.toast-error {
+  border-color: #d9a4a0;
+  color: #823c34;
+  background: #fff0e9;
+}
+
+.toast button {
+  padding: 0 2px;
+  border: 0;
+  color: inherit;
+  background: none;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  z-index: 50;
+  display: grid;
+  overflow-y: auto;
+  padding: 22px;
+  background: rgb(10 27 19 / 68%);
+  inset: 0;
+  place-items: center;
+}
+
+.setup-dialog {
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 44px);
+  overflow-y: auto;
+  padding: 26px;
+  border: 1px solid #d9ccb1;
+  border-radius: 11px;
+  background: #faf7ef;
+  box-shadow: 0 18px 55px rgb(0 0 0 / 30%);
+}
+
+.dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.dialog-header h2 {
+  margin: 0;
+  color: #294637;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  letter-spacing: -0.03em;
+}
+
+.dialog-header p {
+  margin: 7px 0 0;
+  color: #7e8278;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.close-dialog {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #e2d9c8;
+  border-radius: 50%;
+  color: #657064;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.setup-tabs {
+  display: flex;
+  margin: 22px 0 18px;
+  padding: 3px;
+  border: 1px solid #e5ddce;
+  border-radius: 7px;
+  background: #eee9dc;
+}
+
+.setup-tabs button {
+  min-height: 34px;
+  flex: 1;
+  border: 0;
+  border-radius: 5px;
+  color: #7c8076;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.setup-tabs button[aria-selected="true"] {
+  color: #31503e;
+  background: #fffdf7;
+  box-shadow: 0 1px 4px rgb(51 47 34 / 12%);
+}
+
+.name-field,
+.setup-dialog label {
+  display: block;
+  margin: 16px 0 7px;
+  color: #586557;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.setup-dialog input,
+.setup-dialog textarea {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  padding: 10px 11px;
+  border: 1px solid #d8d1c3;
+  border-radius: 6px;
+  color: #334337;
+  background: #fffdf8;
+  font: inherit;
+  font-size: 12px;
+}
+
+.setup-dialog textarea {
+  min-height: 68px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.setup-dialog textarea[readonly] {
+  background: #f2efe7;
+}
+
+.setup-dialog input:focus-visible,
+.setup-dialog textarea:focus-visible {
+  outline: 2px solid #71967a;
+  outline-offset: 1px;
+}
+
+.setup-instructions {
+  margin: 15px 0;
+  color: #777f73;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.secondary-action:hover {
+  background: #f0eadb;
+}
+
+.invite-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.invite-offer {
+  margin-top: 10px;
+}
+
+.invite-offer summary {
+  color: #586557;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.invite-card {
+  padding: 13px;
+  border: 1px solid #e0d8c8;
+  border-radius: 7px;
+  background: #f5f1e7;
+}
+
+.invite-card-heading {
+  justify-content: space-between;
+  color: #3f5947;
+  font-size: 12px;
+}
+
+.invite-status {
+  padding: 4px 7px;
+  border-radius: 20px;
+  color: #8d7956;
+  background: #ece2ce;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.status-connected {
+  color: #38714c;
+  background: #dcebdd;
+}
+
+.status-failed {
+  color: #923e34;
+  background: #f4dfd8;
+}
+
+.status-disconnected {
+  color: #7c8076;
+  background: #e7e5de;
+}
+
+.join-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 13px 0 0;
+  color: #85867b;
+  font-size: 11px;
+}
+
+.join-status.is-live {
+  color: #3b7650;
+}
+
+.dialog-error {
+  margin: 14px 0 0;
+  color: #9a4038;
+  font-size: 12px;
+}
+
+.privacy-note {
+  margin: 20px 0 0;
+  padding-top: 13px;
+  border-top: 1px solid #e8e0d1;
+  color: #97968a;
+  font-size: 10px;
+  line-height: 1.5;
+}
