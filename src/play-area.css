@@ -127,33 +127,72 @@
 
 .bag-illustration {
   display: grid;
-  width: 59px;
-  height: 72px;
+  width: 78px;
+  height: 88px;
   place-items: center;
   filter: drop-shadow(0 5px 3px rgb(0 0 0 / 20%));
 }
 
 .bag-illustration svg {
-  width: 58px;
-  height: 68px;
+  width: 74px;
+  height: 86px;
   overflow: visible;
 }
 
-.bag-illustration path:first-child {
-  fill: #c59b5c;
-  stroke: #e2c58e;
-  stroke-width: 2;
+.bag-body {
+  fill: url("#bag-fabric");
+  stroke: #8f693b;
+  stroke-width: 1.5;
 }
 
-.bag-illustration path:nth-child(2) {
+.bag-opening {
+  fill: #76522f;
+}
+
+.bag-cord,
+.bag-tie {
   fill: none;
-  stroke: #8d693d;
+  stroke: #ead5af;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.bag-gather {
+  fill: none;
+  stroke: #f0d7aa;
   stroke-linecap: round;
   stroke-width: 1.5;
 }
 
-.bag-illustration circle {
-  fill: #8d693d;
+.bag-fold {
+  fill: none;
+  stroke: #8e683d;
+  stroke-linecap: round;
+  stroke-width: 1.4;
+  opacity: 0.52;
+}
+
+.bag-seam {
+  fill: none;
+  stroke: #efdbb6;
+  stroke-dasharray: 1.5 2;
+  stroke-width: 1;
+  opacity: 0.8;
+}
+
+.bag-tile {
+  fill: #fff0ce;
+  stroke: #8c683e;
+  stroke-width: 1;
+}
+
+.bag-letter {
+  fill: #50391f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 9px;
+  font-weight: 700;
+  text-anchor: middle;
 }
 
 .bag-label {

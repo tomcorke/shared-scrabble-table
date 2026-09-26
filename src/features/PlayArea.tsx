@@ -104,12 +104,75 @@ export function PlayArea({
             title="Draw one tile"
           >
             <span className="bag-illustration" aria-hidden="true">
-              <svg viewBox="0 0 72 82" role="presentation">
-                <path d="M24 15c2-8 6-11 12-11s10 3 12 11l7 5c7 5 11 11 10 20l-4 30c-1 7-6 10-14 10H25c-8 0-13-3-14-10L7 40c-1-9 3-15 10-20l7-5Z" />
-                <path d="M23 16c7 4 19 4 26 0M16 32c7 4 15 6 20 6m-19 4 1 20m38-31c-4 4-8 6-13 7" />
-                <circle cx="31" cy="54" r="2" />
-                <circle cx="43" cy="62" r="1.5" />
-                <circle cx="48" cy="48" r="1.5" />
+              <svg viewBox="0 0 96 112" role="presentation">
+                <defs>
+                  <linearGradient
+                    id="bag-fabric"
+                    x1="18"
+                    y1="40"
+                    x2="78"
+                    y2="94"
+                    gradientUnits="userSpaceOnUse"
+                  >
+                    <stop stopColor="#e0c38f" />
+                    <stop offset="0.5" stopColor="#c49a5d" />
+                    <stop offset="1" stopColor="#a47a47" />
+                  </linearGradient>
+                </defs>
+                <path
+                  className="bag-cord"
+                  d="M31 37C21 27 10 23 7 27s7 10 15 14c6 4 4 10-2 18m45-22c10-10 21-14 24-10s-7 10-15 14c-6 4-4 10 2 18"
+                />
+                <ellipse
+                  className="bag-opening"
+                  cx="48"
+                  cy="38"
+                  rx="19"
+                  ry="7"
+                />
+                <g transform="rotate(-10 40 30)">
+                  <rect
+                    className="bag-tile"
+                    x="33"
+                    y="17"
+                    width="14"
+                    height="22"
+                    rx="2"
+                  />
+                  <text className="bag-letter" x="40" y="32">
+                    A
+                  </text>
+                </g>
+                <g transform="rotate(9 55 29)">
+                  <rect
+                    className="bag-tile"
+                    x="48"
+                    y="14"
+                    width="14"
+                    height="23"
+                    rx="2"
+                  />
+                  <text className="bag-letter" x="55" y="30">
+                    E
+                  </text>
+                </g>
+                <path
+                  className="bag-body"
+                  d="M29 36c-7 5-10 12-11 20l-6 31c-2 11 5 18 17 21 11 3 27 3 38 0 12-3 19-10 17-21l-6-31c-1-8-4-15-11-20-6 5-12 5-19 0-7 5-13 5-19 0Z"
+                />
+                <path
+                  className="bag-gather"
+                  d="M29 37c5-4 8 4 13 0s8 4 13 0 8 4 13 0m-35 5 3 7m7-8 1 8m7-8 0 8m8-9-2 9"
+                />
+                <path
+                  className="bag-fold"
+                  d="M31 50c-5 13-6 28-8 43m14-41c-2 14-2 27-1 41m27-43c5 13 6 28 8 43m-14-41c2 14 2 27 1 41"
+                />
+                <path className="bag-seam" d="M20 91c13 8 43 8 56 0" />
+                <path
+                  className="bag-tie"
+                  d="M31 37c-5-6-10-9-16-12m50 12c5-6 10-9 16-12M42 37c2-4 5-4 7 0 2-4 5-4 7 0-2 4-5 4-7 0-2 4-5 4-7 0Z"
+                />
               </svg>
             </span>
             <span className="bag-label">DRAW A TILE</span>
