@@ -49,9 +49,11 @@ export function AppPage({
         myId={state.myId}
         role={state.role}
         onOpenSetup={actions.openHostInvite}
+        performAction={actions.performAction}
       />
       <PlayArea
         players={state.game.players}
+        myId={state.myId}
         ownTiles={ownTiles}
         publicTiles={publicTiles}
         remoteDragPreviews={state.remoteDragPreviews}
@@ -61,7 +63,16 @@ export function AppPage({
         handRef={handRef}
         discardRef={discardRef}
         canPlay={canPlay}
+        canDrawTiles={
+          canPlay &&
+          (state.role === "host" || state.game.drawOptions.allowClientDraw)
+        }
+        canDrawBlankTile={
+          canPlay &&
+          (state.role === "host" || state.game.drawOptions.allowClientBlankDraw)
+        }
         drawTile={actions.drawTile}
+        performAction={actions.performAction}
       />
       {drag && dropPreview && (
         <div

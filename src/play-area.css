@@ -57,18 +57,25 @@
   background: rgb(230 222 192 / 25%);
 }
 
+.draw-station-area {
+  display: flex;
+  width: 124px;
+  flex: 0 0 124px;
+  flex-direction: column;
+  gap: 5px;
+}
+
 .draw-station {
   position: relative;
   z-index: 4;
   display: flex;
-  width: 124px;
   min-height: 0;
-  flex: 0 0 124px;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 12px 8px;
+  padding: 8px 6px;
   border: 1px solid rgb(230 205 153 / 34%);
   border-radius: 8px;
   color: #f3e4c2;
@@ -87,6 +94,35 @@
 .draw-station:hover:not(:disabled) {
   border-color: rgb(237 208 153 / 70%);
   background: rgb(8 48 34 / 58%);
+}
+
+.draw-blank-button {
+  min-height: 25px;
+  flex: 0 0 25px;
+  padding: 0 4px;
+  border: 1px solid rgb(230 205 153 / 34%);
+  border-radius: 6px;
+  color: #f3e4c2;
+  background: rgb(8 48 34 / 48%);
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.draw-blank-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.draw-blank-button:focus-visible {
+  outline: 2px solid #ffda7b;
+  outline-offset: 2px;
+}
+
+.draw-blank-button:hover:not(:disabled) {
+  border-color: rgb(237 208 153 / 70%);
+  background: rgb(8 48 34 / 72%);
 }
 
 .bag-illustration {
@@ -174,12 +210,39 @@
   font-size: 9px;
 }
 
+.discard-all-button {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  min-height: 25px;
+  transform: translateX(-50%);
+  padding: 0 5px;
+  border: 1px solid rgb(236 224 197 / 32%);
+  border-radius: 5px;
+  color: #f0dfbd;
+  background: rgb(9 43 33 / 62%);
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 700;
+  pointer-events: auto;
+}
+
+.discard-all-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.discard-all-button:focus-visible {
+  outline: 2px solid #ffda7b;
+  outline-offset: 2px;
+}
+
 .scrabble-tile {
   position: absolute;
   z-index: 2;
   display: block;
-  width: clamp(42px, 4.2vw, 55px);
-  height: clamp(52px, 5.4vw, 66px);
+  width: 55px;
+  height: 66px;
   padding: 0;
   border: 1px solid #b79866;
   border-bottom: 4px solid #a17d4b;
@@ -218,8 +281,8 @@
 .tile-drop-shadow {
   position: fixed;
   z-index: 1;
-  width: clamp(42px, 4.2vw, 55px);
-  height: clamp(52px, 5.4vw, 66px);
+  width: 55px;
+  height: 66px;
   border: 1px solid rgb(0 0 0 / 24%);
   border-radius: 6px;
   background: rgb(0 0 0 / 24%);
@@ -256,7 +319,7 @@
   left: 50%;
   color: #49361f;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(22px, 2.5vw, 30px);
+  font-size: 30px;
   font-weight: 700;
   line-height: 1;
   transform: translate(-52%, -55%);
@@ -272,15 +335,15 @@
   font-weight: 700;
 }
 
-.tile-owner-dot {
+.tile-owner-accent {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 8px;
+  top: 1px;
+  right: 1px;
+  width: calc(100% - 2px);
   height: 8px;
-  border: 1.5px solid rgb(255 248 228 / 95%);
-  border-radius: 50%;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 25%);
+  clip-path: polygon(100% 0, 100% 50%, 0 50%, 0 0);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 25%));
+  border-radius: 5px;
 }
 
 .wood-rail {

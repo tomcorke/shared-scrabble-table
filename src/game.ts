@@ -69,7 +69,19 @@ export type Player = {
   color: string;
   tileCount: number;
 };
-export type TableState = { players: Player[]; tiles: Tile[] };
+export type DrawOptions = {
+  allowClientDraw: boolean;
+  allowClientBlankDraw: boolean;
+};
+export const DEFAULT_DRAW_OPTIONS: DrawOptions = {
+  allowClientDraw: true,
+  allowClientBlankDraw: true,
+};
+export type TableState = {
+  players: Player[];
+  tiles: Tile[];
+  drawOptions: DrawOptions;
+};
 
 export const MAX_TILE_ROTATION = 5;
 export const DRAG_UPDATE_INTERVAL_MS = 200;
@@ -94,25 +106,26 @@ export function canSendDragUpdate(now: number, lastSentAt: number) {
 }
 
 export function drawTileFace(random = Math.random): string {
-  let roll = random() * 100;
+  let roll = random() * (100 - TILE_DISTRIBUTION["?"]);
   for (const [face, count] of Object.entries(TILE_DISTRIBUTION)) {
+    if (face === "?") continue;
     roll -= count;
     if (roll < 0) return face;
   }
-  return "?";
+  return "Z";
 }
 
 export const MAX_POSITION_OFFSET = 10_000;
 
-export function createTile(
+function createTileWithFace(
   ownerId: string,
+  face: string,
   tiles: Tile[],
   viewportWidth: number,
   rackWidth: number,
   rackHeight: number,
-  random = Math.random,
+  random: () => number,
 ): Tile {
-  const face = drawTileFace(random);
   const rotation = random() * MAX_TILE_ROTATION * 2 - MAX_TILE_ROTATION;
   const position = findRackPosition(
     tiles,
@@ -135,6 +148,44 @@ export function createTile(
   };
 }
 
+export function createTile(
+  ownerId: string,
+  tiles: Tile[],
+  viewportWidth: number,
+  rackWidth: number,
+  rackHeight: number,
+  random = Math.random,
+): Tile {
+  return createTileWithFace(
+    ownerId,
+    drawTileFace(random),
+    tiles,
+    viewportWidth,
+    rackWidth,
+    rackHeight,
+    random,
+  );
+}
+
+export function createBlankTile(
+  ownerId: string,
+  tiles: Tile[],
+  viewportWidth: number,
+  rackWidth: number,
+  rackHeight: number,
+  random = Math.random,
+): Tile {
+  return createTileWithFace(
+    ownerId,
+    "?",
+    tiles,
+    viewportWidth,
+    rackWidth,
+    rackHeight,
+    random,
+  );
+}
+
 // ponytail: full snapshots scan tiles per peer; send deltas if table size causes lag.
 export function snapshotForPlayer(
   state: TableState,
@@ -145,6 +196,7 @@ export function snapshotForPlayer(
     tiles: state.tiles.filter(
       (tile) => tile.zone === "board" || tile.ownerId === playerId,
     ),
+    drawOptions: state.drawOptions,
   };
 }
 
@@ -232,6 +284,12 @@ export function stepTileSwing({
     rotation: boundedRotation,
     angularVelocity: boundedRotation === nextRotation ? settledVelocity : 0,
   };
+}
+
+export function discardHandTiles(tiles: Tile[], ownerId: string): Tile[] {
+  return tiles.filter(
+    (tile) => tile.ownerId !== ownerId || tile.zone !== "hand",
+  );
 }
 
 export function moveTile(

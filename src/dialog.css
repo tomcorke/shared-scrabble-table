@@ -163,6 +163,37 @@
   line-height: 1.55;
 }
 
+.host-options {
+  display: grid;
+  gap: 4px;
+  margin: 17px 0;
+  padding: 8px 12px;
+  border: 1px solid #e0d8c8;
+  border-radius: 7px;
+}
+
+.host-options legend {
+  padding: 0 5px;
+  color: #586557;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.setup-dialog .host-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0;
+  color: #586557;
+  font-size: 11px;
+}
+
+.setup-dialog .host-options input {
+  width: auto;
+  margin: 0;
+  accent-color: #2e5a43;
+}
+
 .primary-action:disabled {
   cursor: not-allowed;
   opacity: 0.48;

@@ -6,12 +6,14 @@ import type { DragState } from "../app/types.ts";
 export function TileButton({
   tile,
   players,
+  myId,
   drag,
   isRemotePreview = false,
   handlers,
 }: {
   tile: Tile;
   players: Player[];
+  myId: string;
   drag: DragState | null;
   isRemotePreview?: boolean;
   handlers: DragHandlers;
@@ -55,9 +57,9 @@ export function TileButton({
         handlers.handleTileKeyDown(event, tile)
       }
     >
-      {tile.zone === "board" && (
+      {tile.zone === "board" && tile.ownerId !== myId && (
         <span
-          className="tile-owner-dot"
+          className="tile-owner-accent"
           style={{ backgroundColor: owner?.color ?? "#777" }}
           aria-hidden="true"
         />

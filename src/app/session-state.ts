@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { type TableState, type Tile } from "../game.ts";
+import { DEFAULT_DRAW_OPTIONS, type TableState, type Tile } from "../game.ts";
 import { playerColor } from "./protocol.ts";
 import type { Invite, PeerRole, SetupTab } from "./types.ts";
 
@@ -17,6 +17,7 @@ export function useSessionState() {
       { id: myId, name: playerName, color: playerColor(0), tileCount: 0 },
     ],
     tiles: [],
+    drawOptions: { ...DEFAULT_DRAW_OPTIONS },
   }));
   const [role, setRole] = useState<PeerRole>("host");
   const [setupTab, setSetupTab] = useState<SetupTab>("host");

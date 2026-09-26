@@ -3,7 +3,9 @@ import test from "node:test";
 import {
   addTileDragImpulse,
   canSendDragUpdate,
+  createBlankTile,
   createTile,
+  discardHandTiles,
   drawTileFace,
   findRackPosition,
   moveTile,
@@ -202,10 +204,19 @@ test("draws from the standard 100-tile distribution", () => {
   );
   assert.equal(
     drawTileFace(() => 0.999),
-    "?",
+    "Z",
   );
   assert.equal(TILE_POINTS.Q, 10);
   assert.equal(TILE_POINTS["?"], 0);
+});
+
+test("blank tiles require the explicit blank draw", () => {
+  const blank = createBlankTile("player-a", [], 764, 708, 108, () => 0.5);
+
+  assert.equal(blank.face, "?");
+  assert.equal(blank.points, 0);
+  assert.equal(blank.ownerId, "player-a");
+  assert.equal(blank.zone, "hand");
 });
 
 test("players receive only their private tiles and shared tiles", () => {
@@ -219,12 +230,30 @@ test("players receive only their private tiles and shared tiles", () => {
       { ...tile, id: "two", ownerId: "player-b" },
       { ...tile, id: "public", ownerId: "player-b", zone: "board" },
     ],
+    drawOptions: {
+      allowClientDraw: false,
+      allowClientBlankDraw: true,
+    },
   };
 
   assert.deepEqual(
     snapshotForPlayer(state, "player-a").tiles.map(({ id }) => id),
     ["one", "public"],
   );
+  assert.deepEqual(
+    snapshotForPlayer(state, "player-a").drawOptions,
+    state.drawOptions,
+  );
+});
+
+test("discards all of one player's hand tiles only", () => {
+  const tiles = [
+    tile,
+    { ...tile, id: "own-board", zone: "board" },
+    { ...tile, id: "other-hand", ownerId: "player-b" },
+  ];
+
+  assert.deepEqual(discardHandTiles(tiles, "player-a"), [tiles[1], tiles[2]]);
 });
 
 test("moving a tile raises it above tiles already placed", () => {

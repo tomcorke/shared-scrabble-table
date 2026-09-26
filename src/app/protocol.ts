@@ -1,6 +1,9 @@
 import {
   MAX_POSITION_OFFSET,
   MAX_TILE_ROTATION,
+  TILE_DISTRIBUTION,
+  TILE_POINTS,
+  type DrawOptions,
   type Player,
   type TableState,
   type Tile,
@@ -71,8 +74,9 @@ export function isTile(value: unknown): value is Tile {
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.face === "string" &&
+    Object.hasOwn(TILE_DISTRIBUTION, value.face) &&
     typeof value.points === "number" &&
-    Number.isFinite(value.points) &&
+    value.points === TILE_POINTS[value.face] &&
     typeof value.ownerId === "string" &&
     (value.zone === "hand" || value.zone === "board") &&
     typeof value.x === "number" &&
@@ -84,6 +88,14 @@ export function isTile(value: unknown): value is Tile {
     typeof value.rotation === "number" &&
     Number.isFinite(value.rotation) &&
     Math.abs(value.rotation) <= MAX_TILE_ROTATION
+  );
+}
+
+function isDrawOptions(value: unknown): value is DrawOptions {
+  return (
+    isRecord(value) &&
+    typeof value.allowClientDraw === "boolean" &&
+    typeof value.allowClientBlankDraw === "boolean"
   );
 }
 
@@ -105,7 +117,9 @@ export function isTableState(value: unknown): value is TableState {
         typeof player.tileCount === "number" &&
         Number.isInteger(player.tileCount) &&
         player.tileCount >= 0,
-    ) && value.tiles.every(isTile)
+    ) &&
+    value.tiles.every(isTile) &&
+    isDrawOptions(value.drawOptions)
   );
 }
 

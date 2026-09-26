@@ -69,6 +69,41 @@ export function SetupDialog({ session }: { session: TableSession }) {
               Make an invite, then send its code to a friend. They will return
               an answer code for you to paste below.
             </p>
+            <fieldset className="host-options">
+              <legend>Client permissions</legend>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={state.game.drawOptions.allowClientDraw}
+                  onChange={(event) =>
+                    actions.performAction({
+                      kind: "set-draw-options",
+                      drawOptions: {
+                        ...state.game.drawOptions,
+                        allowClientDraw: event.currentTarget.checked,
+                      },
+                    })
+                  }
+                />
+                Clients can draw tiles
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={state.game.drawOptions.allowClientBlankDraw}
+                  onChange={(event) =>
+                    actions.performAction({
+                      kind: "set-draw-options",
+                      drawOptions: {
+                        ...state.game.drawOptions,
+                        allowClientBlankDraw: event.currentTarget.checked,
+                      },
+                    })
+                  }
+                />
+                Clients can draw blank tiles
+              </label>
+            </fieldset>
             <button
               className="primary-action"
               type="button"

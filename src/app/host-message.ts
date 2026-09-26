@@ -1,5 +1,5 @@
 import {
-  createTile,
+  discardHandTiles,
   MAX_POSITION_OFFSET,
   MAX_TILE_ROTATION,
   moveTile,
@@ -9,17 +9,18 @@ import {
 } from "../game.ts";
 import {
   isRecord,
+  isTile,
   parseMessage,
   playerColor,
-  positiveDimension,
   sendMessage,
 } from "./protocol.ts";
 import type { SessionState } from "./session-state.ts";
-import type { InviteStatus } from "./types.ts";
+import type { InviteStatus, PendingDrawGrant } from "./types.ts";
 
 export type HostMessageContext = {
   state: SessionState;
   hostChannels: Map<RTCDataChannel, string>;
+  pendingDrawGrants: Map<string, PendingDrawGrant>;
   setInviteStatus(id: string, status: InviteStatus): void;
   commitHostState(next: TableState): TableState;
   snapshotFor(playerId: string): TableState;
@@ -43,9 +44,12 @@ export function handleHostMessage(
     handleHostHello(context, inviteId, channel, message.name);
     return;
   }
-  if (message.type !== "action" || !isRecord(message.action)) return;
-
   const playerId = context.hostChannels.get(channel);
+  if (message.type === "draw-grant-result") {
+    if (playerId) handleDrawGrantResult(context, playerId, message);
+    return;
+  }
+  if (message.type !== "action" || !isRecord(message.action)) return;
   if (playerId) handleHostAction(context, channel, playerId, message.action);
 }
 
@@ -88,6 +92,7 @@ function handleHostAction(
   if (handleDragPreview(context, channel, playerId, action)) return;
   if (handleDragEnd(context, channel, playerId, action)) return;
   if (handleDraw(context, playerId, action)) return;
+  if (handleDiscardAll(context, playerId, action)) return;
   handleMove(context, channel, playerId, action);
 }
 
@@ -155,21 +160,77 @@ function handleDraw(
 ) {
   if (action.kind !== "draw") return false;
   const current = context.state.gameRef.current;
-  const viewportWidth = positiveDimension(
-    action.viewportWidth,
-    window.innerWidth,
-  );
-  const rackWidth = positiveDimension(action.rackWidth, window.innerWidth);
-  const rackHeight = positiveDimension(action.rackHeight, 108);
+  const tile = action.tile;
+  const occupiedIds = new Set(current.tiles.map((item) => item.id));
+  if (!isDrawnHandTile(tile, playerId, occupiedIds)) return true;
+  if (
+    tile.face === "?"
+      ? !current.drawOptions.allowClientBlankDraw
+      : !current.drawOptions.allowClientDraw
+  )
+    return true;
+  appendDrawnTiles(context, [tile]);
+  return true;
+}
+
+function handleDiscardAll(
+  context: HostMessageContext,
+  playerId: string,
+  action: Record<string, unknown>,
+) {
+  if (action.kind !== "discard-all") return false;
+  const current = context.state.gameRef.current;
   context.commitHostState({
     ...current,
-    tiles: [
-      ...current.tiles,
-      createTile(playerId, current.tiles, viewportWidth, rackWidth, rackHeight),
-    ],
+    tiles: discardHandTiles(current.tiles, playerId),
   });
   context.broadcast();
   return true;
+}
+
+function handleDrawGrantResult(
+  context: HostMessageContext,
+  playerId: string,
+  message: Record<string, unknown>,
+) {
+  if (typeof message.grantId !== "string") return;
+  const grant = context.pendingDrawGrants.get(message.grantId);
+  if (!grant || grant.playerId !== playerId || grant.received >= grant.count)
+    return;
+  const current = context.state.gameRef.current;
+  const occupiedIds = new Set(current.tiles.map((tile) => tile.id));
+  const tile = message.tile;
+  if (
+    !isDrawnHandTile(tile, playerId, occupiedIds) ||
+    (tile.face === "?") !== grant.blank
+  )
+    return;
+  grant.received++;
+  if (grant.received === grant.count)
+    context.pendingDrawGrants.delete(message.grantId);
+  appendDrawnTiles(context, [tile]);
+}
+
+function isDrawnHandTile(
+  value: unknown,
+  playerId: string,
+  occupiedIds: Set<string>,
+): value is Tile {
+  if (
+    !isTile(value) ||
+    value.ownerId !== playerId ||
+    value.zone !== "hand" ||
+    occupiedIds.has(value.id)
+  )
+    return false;
+  occupiedIds.add(value.id);
+  return true;
+}
+
+function appendDrawnTiles(context: HostMessageContext, tiles: Tile[]) {
+  const current = context.state.gameRef.current;
+  context.commitHostState({ ...current, tiles: [...current.tiles, ...tiles] });
+  context.broadcast();
 }
 
 function handleMove(

@@ -158,6 +158,13 @@
   scrollbar-width: thin;
 }
 
+.player-entry {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .player-card {
   min-width: 145px;
   height: 42px;
@@ -172,6 +179,52 @@
 .player-card.is-you {
   border-color: #d1c0a0;
   background: #fffaf0;
+}
+
+.player-grant-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.player-grant-controls input {
+  width: 52px;
+  min-width: 0;
+  height: 24px;
+  padding: 2px 4px;
+  border: 1px solid #d8d1c3;
+  border-radius: 4px;
+  color: #334337;
+  background: #fffdf8;
+  font: inherit;
+  font-size: 10px;
+}
+
+.player-grant-controls button {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid #cfc4ae;
+  border-radius: 4px;
+  color: #47604c;
+  background: #fffdf8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.player-grant-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.player-grant-controls button:hover:not(:disabled) {
+  background: #f0eadb;
+}
+
+.player-grant-controls :focus-visible {
+  outline: 2px solid #71967a;
+  outline-offset: 1px;
 }
 
 .player-avatar {

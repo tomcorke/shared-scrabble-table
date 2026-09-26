@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import type { MutableRefObject } from "react";
 import type { Tile } from "../game.ts";
 import { parseSessionDescription } from "../signalling.ts";
 import { HostController } from "./host-controller.ts";
@@ -8,11 +7,10 @@ import type { SessionState } from "./session-state.ts";
 
 export function useHostSession(
   state: SessionState,
-  handRef: MutableRefObject<HTMLDivElement | null>,
   updateRemoteDragPreview: (tileId: string, tile: Tile | null) => void,
 ) {
   const [controller] = useState(
-    () => new HostController(state, handRef, updateRemoteDragPreview),
+    () => new HostController(state, updateRemoteDragPreview),
   );
 
   useEffect(() => () => controller.closeHostConnections(), [controller]);

@@ -1,4 +1,17 @@
-import type { MoveDestination, TableState, Tile } from "../game.ts";
+import type {
+  DrawOptions,
+  MoveDestination,
+  TableState,
+  Tile,
+} from "../game.ts";
+
+export const MAX_GRANTED_TILES = 100;
+export type PendingDrawGrant = {
+  playerId: string;
+  count: number;
+  blank: boolean;
+  received: number;
+};
 
 export type PeerRole = "host" | "guest";
 export type SetupTab = "host" | "join";
@@ -13,12 +26,10 @@ export type Invite = {
 };
 
 export type Action =
-  | {
-      kind: "draw";
-      viewportWidth: number;
-      rackWidth: number;
-      rackHeight: number;
-    }
+  | { kind: "draw"; tile: Tile }
+  | { kind: "discard-all" }
+  | { kind: "set-draw-options"; drawOptions: DrawOptions }
+  | { kind: "grant-draw"; playerId: string; count: number; blank: boolean }
   | {
       kind: "drag-preview";
       tileId: string;

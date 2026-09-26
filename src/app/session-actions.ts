@@ -1,7 +1,9 @@
 import type { MutableRefObject } from "react";
+import { createBlankTile, createTile } from "../game.ts";
 import type { SessionState } from "./session-state.ts";
 import type { HostSession } from "./use-host-session.ts";
 import type { GuestSession } from "./use-guest-session.ts";
+import { unlockTileAudio } from "./tile-sound.ts";
 import type { Action, SetupTab } from "./types.ts";
 
 export class SessionActions {
@@ -51,18 +53,32 @@ export class SessionActions {
     }
   };
 
-  drawTile = () =>
-    this.performAction({
-      kind: "draw",
-      viewportWidth: window.innerWidth,
-      rackWidth: this.handRef.current?.clientWidth ?? window.innerWidth,
-      rackHeight: this.handRef.current?.clientHeight ?? 108,
-    });
+  private makeTile(blank: boolean) {
+    const game = this.state.gameRef.current;
+    const create = blank ? createBlankTile : createTile;
+    return create(
+      this.state.myIdRef.current,
+      game.tiles,
+      window.innerWidth,
+      this.handRef.current?.clientWidth ?? window.innerWidth,
+      this.handRef.current?.clientHeight ?? 108,
+    );
+  }
+
+  drawTile = (blank = false) => {
+    unlockTileAudio();
+    this.performAction({ kind: "draw", tile: this.makeTile(blank) });
+  };
 
   performAction = (action: Action) => {
-    if (this.state.roleRef.current === "host")
+    if (this.state.roleRef.current === "host") {
       this.host.controller.performAction(action);
-    else this.guest.sendAction(action);
+    } else if (
+      action.kind !== "set-draw-options" &&
+      action.kind !== "grant-draw"
+    ) {
+      this.guest.sendAction(action);
+    }
   };
 
   attempt = async (action: () => Promise<void>) => {
@@ -78,13 +94,17 @@ export class SessionActions {
   };
 
   createInvite = async () => {
+    unlockTileAudio();
     this.savePlayerName();
     await this.host.createInvite();
   };
 
   applyAnswer = (inviteId: string) => this.host.applyAnswer(inviteId);
 
-  createAnswer = () => this.guest.createAnswer(this.savePlayerName);
+  createAnswer = () => {
+    unlockTileAudio();
+    return this.guest.createAnswer(this.savePlayerName);
+  };
 
   resetJoin = () => {
     this.guest.closeGuestConnection();

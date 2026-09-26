@@ -1,5 +1,12 @@
 import { useEffect, useRef } from "react";
-import type { Player, Tile } from "../game.ts";
+import type { MutableRefObject } from "react";
+import {
+  createBlankTile,
+  createTile,
+  DEFAULT_DRAW_OPTIONS,
+  type Player,
+  type Tile,
+} from "../game.ts";
 import { parseSessionDescription } from "../signalling.ts";
 import { handleGuestMessage } from "./guest-message.ts";
 import {
@@ -11,8 +18,46 @@ import {
 import type { Action } from "./types.ts";
 import type { SessionState } from "./session-state.ts";
 
+const DRAW_GRANT_INTERVAL_MS = 140;
+
+function sendDrawGrantResult(
+  state: SessionState,
+  handRef: MutableRefObject<HTMLDivElement | null>,
+  channel: RTCDataChannel,
+  grantId: string,
+  count: number,
+  blank: boolean,
+) {
+  const grantedTiles: Tile[] = [];
+  const create = blank ? createBlankTile : createTile;
+  let remaining = count;
+  const drawNext = () => {
+    if (channel.readyState !== "open") return;
+    const tiles = [...state.gameRef.current.tiles];
+    const tileIds = new Set(tiles.map((tile) => tile.id));
+    for (const tile of grantedTiles) {
+      if (tileIds.has(tile.id)) continue;
+      tiles.push(tile);
+      tileIds.add(tile.id);
+    }
+    const tile = create(
+      state.myIdRef.current,
+      tiles,
+      window.innerWidth,
+      handRef.current?.clientWidth ?? window.innerWidth,
+      handRef.current?.clientHeight ?? 108,
+    );
+    grantedTiles.push(tile);
+    sendMessage(channel, { type: "draw-grant-result", grantId, tile });
+    remaining--;
+    if (remaining > 0) window.setTimeout(drawNext, DRAW_GRANT_INTERVAL_MS);
+  };
+  drawNext();
+}
+
 export function useGuestSession(
   state: SessionState,
+  handRef: MutableRefObject<HTMLDivElement | null>,
   closeHostConnections: () => void,
   updateRemoteDragPreview: (tileId: string, tile: Tile | null) => void,
 ) {
@@ -56,7 +101,11 @@ export function useGuestSession(
       color: playerColor(0),
       tileCount: 0,
     };
-    state.updateGame({ players: [localPlayer], tiles: [] });
+    state.updateGame({
+      players: [localPlayer],
+      tiles: [],
+      drawOptions: { ...DEFAULT_DRAW_OPTIONS },
+    });
 
     const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerRef.current = peer;
@@ -73,7 +122,13 @@ export function useGuestSession(
         sendMessage(channel, { type: "hello", name: state.nameRef.current });
       };
       channel.onmessage = ({ data }) =>
-        handleGuestMessage(state, updateRemoteDragPreview, data);
+        handleGuestMessage(
+          state,
+          updateRemoteDragPreview,
+          data,
+          (grantId, count, blank) =>
+            sendDrawGrantResult(state, handRef, channel, grantId, count, blank),
+        );
       channel.onclose = () => {
         state.setConnectionState("disconnected");
         state.setRemoteDragPreviews({});

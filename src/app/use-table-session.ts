@@ -17,9 +17,10 @@ export function useTableSession(
       return next;
     });
   };
-  const host = useHostSession(state, handRef, updateRemoteDragPreview);
+  const host = useHostSession(state, updateRemoteDragPreview);
   const guest = useGuestSession(
     state,
+    handRef,
     host.controller.closeHostConnections,
     updateRemoteDragPreview,
   );

@@ -1,6 +1,5 @@
-import type { MutableRefObject } from "react";
 import {
-  createTile,
+  discardHandTiles,
   moveTile,
   snapshotForPlayer,
   type TableState,
@@ -10,21 +9,25 @@ import { handleHostMessage, type HostMessageContext } from "./host-message.ts";
 import { HostPreviews, type HostRefs } from "./host-previews.ts";
 import { countTiles, sendMessage } from "./protocol.ts";
 import type { SessionState } from "./session-state.ts";
-import type { Action, InviteStatus } from "./types.ts";
+import { playTileSound } from "./tile-sound.ts";
+import {
+  MAX_GRANTED_TILES,
+  type Action,
+  type InviteStatus,
+  type PendingDrawGrant,
+} from "./types.ts";
 
 export class HostController {
   private readonly state: SessionState;
   private readonly refs: HostRefs;
-  private readonly handRef: MutableRefObject<HTMLDivElement | null>;
   private readonly previews: HostPreviews;
+  private readonly pendingDrawGrants = new Map<string, PendingDrawGrant>();
 
   constructor(
     state: SessionState,
-    handRef: MutableRefObject<HTMLDivElement | null>,
     updateRemoteDragPreview: (tileId: string, tile: Tile | null) => void,
   ) {
     this.state = state;
-    this.handRef = handRef;
     this.refs = {
       peers: new Map(),
       channels: new Map(),
@@ -56,7 +59,16 @@ export class HostController {
   };
 
   commitHostState = (next: TableState) => {
+    const previous = this.state.gameRef.current;
     const updated = { ...next, players: countTiles(next.players, next.tiles) };
+    const previousIds = new Set(previous.tiles.map((tile) => tile.id));
+    for (const tile of updated.tiles) {
+      if (previousIds.has(tile.id)) continue;
+      previousIds.add(tile.id);
+      playTileSound();
+      for (const channel of this.refs.channels.keys())
+        sendMessage(channel, { type: "tile-drawn" });
+    }
     this.state.gameRef.current = updated;
     this.state.setGame(updated);
     return updated;
@@ -81,11 +93,15 @@ export class HostController {
     this.refs.channels.delete(channel);
     this.refs.lastDragUpdateAt.delete(channel);
     if (playerId) {
+      for (const [grantId, grant] of this.pendingDrawGrants) {
+        if (grant.playerId === playerId) this.pendingDrawGrants.delete(grantId);
+      }
       for (const [tileId, ownerId] of this.refs.activeDragOwners) {
         if (ownerId === playerId) this.previews.end(tileId);
       }
       const current = this.state.gameRef.current;
       this.commitHostState({
+        ...current,
         players: current.players.filter((player) => player.id !== playerId),
         tiles: current.tiles.filter((tile) => tile.ownerId !== playerId),
       });
@@ -104,6 +120,7 @@ export class HostController {
     this.refs.channels.clear();
     this.refs.activeDragOwners.clear();
     this.refs.lastDragUpdateAt.clear();
+    this.pendingDrawGrants.clear();
     for (const peer of this.refs.peers.values()) {
       peer.onconnectionstatechange = null;
       peer.close();
@@ -119,6 +136,7 @@ export class HostController {
     const context: HostMessageContext = {
       state: this.state,
       hostChannels: this.refs.channels,
+      pendingDrawGrants: this.pendingDrawGrants,
       setInviteStatus: this.setInviteStatus.bind(this),
       commitHostState: this.commitHostState.bind(this),
       snapshotFor: this.snapshotFor.bind(this),
@@ -137,20 +155,26 @@ export class HostController {
     const current = this.state.gameRef.current;
     switch (action.kind) {
       case "draw":
+        if (action.tile.ownerId !== this.state.myIdRef.current) break;
         this.commitHostState({
           ...current,
-          tiles: [
-            ...current.tiles,
-            createTile(
-              this.state.myIdRef.current,
-              current.tiles,
-              window.innerWidth,
-              this.handRef.current?.clientWidth ?? window.innerWidth,
-              this.handRef.current?.clientHeight ?? 108,
-            ),
-          ],
+          tiles: [...current.tiles, action.tile],
         });
         this.broadcast();
+        break;
+      case "discard-all":
+        this.commitHostState({
+          ...current,
+          tiles: discardHandTiles(current.tiles, this.state.myIdRef.current),
+        });
+        this.broadcast();
+        break;
+      case "set-draw-options":
+        this.commitHostState({ ...current, drawOptions: action.drawOptions });
+        this.broadcast();
+        break;
+      case "grant-draw":
+        sendDrawGrant(this.refs, this.pendingDrawGrants, action);
         break;
       case "drag-preview": {
         const tile = current.tiles.find(
@@ -189,4 +213,39 @@ export class HostController {
         break;
     }
   };
+}
+
+function sendDrawGrant(
+  refs: HostRefs,
+  pendingDrawGrants: Map<string, PendingDrawGrant>,
+  action: Extract<Action, { kind: "grant-draw" }>,
+) {
+  if (
+    !Number.isInteger(action.count) ||
+    action.count < 1 ||
+    action.count > MAX_GRANTED_TILES
+  )
+    return;
+  let channel: RTCDataChannel | undefined;
+  for (const [candidate, playerId] of refs.channels) {
+    if (playerId === action.playerId) {
+      channel = candidate;
+      break;
+    }
+  }
+  if (!channel) return;
+  const grantId = crypto.randomUUID();
+  const count = action.blank ? 1 : action.count;
+  pendingDrawGrants.set(grantId, {
+    playerId: action.playerId,
+    count,
+    blank: action.blank,
+    received: 0,
+  });
+  sendMessage(
+    channel,
+    action.blank
+      ? { type: "draw-blank-grant", grantId }
+      : { type: "draw-grant", grantId, count },
+  );
 }
