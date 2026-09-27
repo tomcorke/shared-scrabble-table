@@ -13,9 +13,9 @@ pnpm install
 pnpm dev
 ```
 
-Open the app in a browser. The first player hosts the table. Select **Invite someone to play**, create an invite, and send its code to another player. They select **Join another table**, paste the code, and create an answer. Send the answer back to the host, who pastes it into the matching invite. The join dialog closes when the host connects. Keep both pages open while you play.
+Open the app in a browser. The first player hosts the table. To connect manually, select **Invite someone to play** and send the invite code. The guest selects **Join another table**, creates an answer, and sends it back for the host to apply. Or deploy a signalling server at a reachable HTTPS address, enter its address, and share the room code. The host accepts each join request; offers and answers are then exchanged automatically. Keep both pages open while you play.
 
-Session JSON moves by copy and paste. The app does not use a signalling server or store games. The host browser coordinates the table; if it closes, the session ends. Each guest receives their own rack and the shared tiles, not other players' private tile faces.
+The signalling server relays connection setup only. Table data still travels directly between browsers, and the app does not store games. The host browser coordinates the table; if it closes, the session ends. Each guest receives their own rack and the shared tiles, not other players' private tile faces.
 
 ## Play
 

@@ -94,16 +94,29 @@ export class SessionActions {
   };
 
   createInvite = async () => {
-    unlockTileAudio();
     this.savePlayerName();
-    await this.host.createInvite();
+    if (this.state.useSignallingServer) {
+      await this.host.startSignallingRoom(this.state.signallingServerUrl);
+    } else {
+      unlockTileAudio();
+      await this.host.createInvite();
+    }
   };
 
   applyAnswer = (inviteId: string) => this.host.applyAnswer(inviteId);
 
+  respondToSignallingRequest = (clientId: string, accept: boolean) =>
+    this.host.respondToSignallingRequest(clientId, accept);
+
   createAnswer = () => {
     unlockTileAudio();
-    return this.guest.createAnswer(this.savePlayerName);
+    return this.state.useSignallingServer
+      ? this.guest.joinViaSignallingServer(
+          this.state.signallingServerUrl,
+          this.state.signallingJoinCode,
+          this.savePlayerName,
+        )
+      : this.guest.createAnswer(this.savePlayerName);
   };
 
   resetJoin = () => {
@@ -111,6 +124,7 @@ export class SessionActions {
     this.state.setRemoteOffer("");
     this.state.setLocalAnswer("");
     this.state.setConnectionState("idle");
+    this.state.setSignallingJoinStatus("idle");
     this.state.setRemoteDragPreviews({});
     this.state.setError("");
     this.state.setNotice("");

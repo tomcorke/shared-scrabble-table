@@ -15,11 +15,17 @@ export type PendingDrawGrant = {
 
 export type PeerRole = "host" | "guest";
 export type SetupTab = "host" | "join";
+export type InviteTransport = "manual" | "server";
+export type SignallingRoomStatus = "idle" | "starting" | "ready" | "error";
+export type SignallingJoinStatus =
+  "idle" | "requesting" | "waiting" | "answering" | "submitted";
+export type SignallingRequest = { clientId: string; createdAt: string };
 export type InviteStatus =
   "ready" | "connecting" | "connected" | "failed" | "disconnected";
 
 export type Invite = {
   id: string;
+  transport: InviteTransport;
   offer: string;
   answer: string;
   status: InviteStatus;

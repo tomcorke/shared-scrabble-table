@@ -1,9 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Tile } from "../game.ts";
 import { parseSessionDescription } from "../signalling.ts";
 import { HostController } from "./host-controller.ts";
-import { ICE_SERVERS, waitForIceCandidates } from "./protocol.ts";
+import {
+  createHostInvite,
+  pollSignallingRoom,
+  type OfferDelivery,
+} from "./host-signalling.ts";
+import { createSignallingServerClient } from "./signalling-server-client.ts";
 import type { SessionState } from "./session-state.ts";
+
+async function applyHostAnswer(
+  state: SessionState,
+  controller: HostController,
+  inviteId: string,
+) {
+  const invite = state.invites.find((item) => item.id === inviteId);
+  const peer = controller.getPeer(inviteId);
+  if (!invite || !peer) throw new Error("Create an invite first");
+  const description = parseSessionDescription(invite.answer);
+  if (description.type !== "answer") throw new Error("Paste an answer here");
+  await peer.setRemoteDescription(description);
+  controller.setInviteStatus(inviteId, "connecting");
+}
 
 export function useHostSession(
   state: SessionState,
@@ -12,55 +31,99 @@ export function useHostSession(
   const [controller] = useState(
     () => new HostController(state, updateRemoteDragPreview),
   );
+  const roomPollRef = useRef<AbortController | null>(null);
+  const roomRef = useRef<OfferDelivery | null>(null);
 
-  useEffect(() => () => controller.closeHostConnections(), [controller]);
+  useEffect(
+    () => () => {
+      roomPollRef.current?.abort();
+      controller.closeHostConnections();
+    },
+    [controller],
+  );
 
-  const createInvite = async () => {
-    const id = crypto.randomUUID();
-    const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    controller.addPeer(id, peer);
-    const channel = peer.createDataChannel("shared-scrabble-table");
-    channel.onopen = () => controller.setInviteStatus(id, "connecting");
-    channel.onmessage = ({ data }) =>
-      controller.handleMessage(id, channel, data);
-    channel.onclose = () => controller.disconnectHostChannel(id, channel);
-    peer.onconnectionstatechange = () => {
-      if (peer.connectionState === "failed")
-        controller.setInviteStatus(id, "failed");
-      if (peer.connectionState === "closed")
-        controller.setInviteStatus(id, "disconnected");
-    };
+  const createInvite = () =>
+    createHostInvite(state, controller, crypto.randomUUID());
 
+  const startSignallingRoom = async (serverAddress: string) => {
+    roomPollRef.current?.abort();
+    roomRef.current = null;
+    const poll = new AbortController();
+    roomPollRef.current = poll;
+    state.setSignallingRequests([]);
+    state.setSignallingRoomCode("");
+    state.setSignallingRoomStatus("starting");
     try {
-      await peer.setLocalDescription(await peer.createOffer());
-      await waitForIceCandidates(peer);
-      state.setInvites((current) => [
-        ...current,
-        {
-          id,
-          offer: JSON.stringify(peer.localDescription),
-          answer: "",
-          status: "ready",
-        },
-      ]);
+      const client = createSignallingServerClient(serverAddress);
+      const room = await client.createRoom(poll.signal);
+      if (poll.signal.aborted) return;
+      roomRef.current = {
+        client,
+        code: room.code,
+        hostToken: room.hostToken,
+        signal: poll.signal,
+      };
+      state.setSignallingRoomCode(room.code);
+      state.setSignallingRoomStatus("ready");
+      void pollSignallingRoom(
+        state,
+        controller,
+        client,
+        room.code,
+        room.hostToken,
+        poll.signal,
+      );
     } catch (caught) {
-      controller.removePeer(id);
-      peer.close();
+      if (poll.signal.aborted) return;
+      state.setSignallingRoomStatus("error");
       throw caught;
     }
   };
 
-  const applyAnswer = async (inviteId: string) => {
-    const invite = state.invites.find((item) => item.id === inviteId);
-    const peer = controller.getPeer(inviteId);
-    if (!invite || !peer) throw new Error("Create an invite first");
-    const description = parseSessionDescription(invite.answer);
-    if (description.type !== "answer") throw new Error("Paste an answer here");
-    await peer.setRemoteDescription(description);
-    controller.setInviteStatus(inviteId, "connecting");
+  const respondToSignallingRequest = async (
+    clientId: string,
+    accept: boolean,
+  ) => {
+    const room = roomRef.current;
+    if (!room || room.signal.aborted)
+      throw new Error("Start an exchange room first");
+    if (accept) {
+      if (controller.getPeer(clientId)) return;
+      await createHostInvite(state, controller, clientId, room);
+      return;
+    }
+    await room.client.rejectRequest(
+      room.code,
+      clientId,
+      room.hostToken,
+      room.signal,
+    );
+    state.setSignallingRequests((current) =>
+      current.filter((request) => request.clientId !== clientId),
+    );
   };
 
-  return { controller, createInvite, applyAnswer };
+  const closeHostSession = () => {
+    roomPollRef.current?.abort();
+    roomPollRef.current = null;
+    roomRef.current = null;
+    state.setSignallingRequests([]);
+    state.setSignallingRoomCode("");
+    state.setSignallingRoomStatus("idle");
+    controller.closeHostConnections();
+  };
+
+  const applyAnswer = (inviteId: string) =>
+    applyHostAnswer(state, controller, inviteId);
+
+  return {
+    controller,
+    createInvite,
+    applyAnswer,
+    startSignallingRoom,
+    respondToSignallingRequest,
+    closeHostSession,
+  };
 }
 
 export type HostSession = ReturnType<typeof useHostSession>;

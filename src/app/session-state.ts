@@ -1,7 +1,40 @@
 import { useRef, useState } from "react";
 import { DEFAULT_DRAW_OPTIONS, type TableState, type Tile } from "../game.ts";
 import { playerColor } from "./protocol.ts";
-import type { Invite, PeerRole, SetupTab } from "./types.ts";
+import type {
+  Invite,
+  PeerRole,
+  SetupTab,
+  SignallingJoinStatus,
+  SignallingRequest,
+  SignallingRoomStatus,
+} from "./types.ts";
+
+function useSignallingState() {
+  const [useServer, setUseServer] = useState(false);
+  const [serverUrl, setServerUrl] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [roomCode, setRoomCode] = useState("");
+  const [requests, setRequests] = useState<SignallingRequest[]>([]);
+  const [roomStatus, setRoomStatus] = useState<SignallingRoomStatus>("idle");
+  const [joinStatus, setJoinStatus] = useState<SignallingJoinStatus>("idle");
+  return {
+    useSignallingServer: useServer,
+    setUseSignallingServer: setUseServer,
+    signallingServerUrl: serverUrl,
+    setSignallingServerUrl: setServerUrl,
+    signallingJoinCode: joinCode,
+    setSignallingJoinCode: setJoinCode,
+    signallingRequests: requests,
+    setSignallingRequests: setRequests,
+    signallingRoomCode: roomCode,
+    setSignallingRoomCode: setRoomCode,
+    signallingRoomStatus: roomStatus,
+    setSignallingRoomStatus: setRoomStatus,
+    signallingJoinStatus: joinStatus,
+    setSignallingJoinStatus: setJoinStatus,
+  };
+}
 
 export function useSessionState() {
   const [myId, setMyId] = useState<string>(() => crypto.randomUUID());
@@ -23,6 +56,7 @@ export function useSessionState() {
   const [setupTab, setSetupTab] = useState<SetupTab>("host");
   const [setupOpen, setSetupOpen] = useState(false);
   const [invites, setInvites] = useState<Invite[]>([]);
+  const signalling = useSignallingState();
   const [remoteOffer, setRemoteOffer] = useState("");
   const [localAnswer, setLocalAnswer] = useState("");
   const [connectionState, setConnectionState] = useState("idle");
@@ -64,6 +98,7 @@ export function useSessionState() {
     setSetupOpen,
     invites,
     setInvites,
+    ...signalling,
     remoteOffer,
     setRemoteOffer,
     localAnswer,

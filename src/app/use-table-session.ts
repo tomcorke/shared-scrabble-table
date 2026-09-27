@@ -21,7 +21,7 @@ export function useTableSession(
   const guest = useGuestSession(
     state,
     handRef,
-    host.controller.closeHostConnections,
+    host.closeHostSession,
     updateRemoteDragPreview,
   );
   const [performAction] = useState(
