@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type { Player } from "../game.ts";
-import { MAX_GRANTED_TILES, type Action, type PeerRole } from "../app/types.ts";
+import {
+  MAX_GRANTED_TILES,
+  type Action,
+  type HostAction,
+  type PeerRole,
+} from "../app/types.ts";
 
 export function PlayerStrip({
   players,
@@ -8,12 +13,14 @@ export function PlayerStrip({
   role,
   onOpenSetup,
   performAction,
+  performHostAction,
 }: {
   players: Player[];
   myId: string;
   role: PeerRole;
   onOpenSetup(tab: "host"): void;
   performAction(action: Action): void;
+  performHostAction(action: HostAction): void;
 }) {
   const [tileCounts, setTileCounts] = useState<Record<string, string>>({});
 
@@ -41,6 +48,7 @@ export function PlayerStrip({
                 <span className="player-name">
                   {player.name}
                   {player.id === myId && <small>YOU</small>}
+                  {player.isVip && <small className="vip-badge">VIP</small>}
                 </span>
                 <span
                   className="player-tile-count"
@@ -101,6 +109,57 @@ export function PlayerStrip({
                   </button>
                 </div>
               )}
+              {role === "host" &&
+                (player.id !== myId || player.tileCount > 0) && (
+                  <div className="player-admin-controls">
+                    {player.id !== myId && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          performHostAction({
+                            kind: "set-player-vip",
+                            playerId: player.id,
+                            isVip: !player.isVip,
+                          })
+                        }
+                      >
+                        {player.isVip ? "Revoke VIP" : "Grant VIP"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={player.tileCount === 0}
+                      onClick={() =>
+                        window.confirm(
+                          `Discard all of ${player.id === myId ? "your" : `${player.name}'s`} tiles?`,
+                        ) &&
+                        performHostAction({
+                          kind: "discard-player-tiles",
+                          playerId: player.id,
+                        })
+                      }
+                    >
+                      Discard all
+                    </button>
+                    {player.id !== myId && (
+                      <button
+                        type="button"
+                        className="player-danger-action"
+                        onClick={() =>
+                          window.confirm(
+                            `Disconnect ${player.name} and remove all their tiles?`,
+                          ) &&
+                          performHostAction({
+                            kind: "disconnect-player",
+                            playerId: player.id,
+                          })
+                        }
+                      >
+                        Disconnect
+                      </button>
+                    )}
+                  </div>
+                )}
             </div>
           );
         })}

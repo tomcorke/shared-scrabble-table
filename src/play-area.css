@@ -298,6 +298,10 @@
   user-select: none;
 }
 
+.scrabble-tile.is-locked {
+  cursor: default;
+}
+
 .scrabble-tile:hover {
   box-shadow:
     0 5px 9px rgb(8 30 20 / 32%),

@@ -17,7 +17,7 @@ function App() {
     [tableRef, discardRef, handRef],
   );
   const session = useTableSession(handRef);
-  const tileDrag = useTileDrag(session.refs.myId, session.performAction, areas);
+  const tileDrag = useTileDrag(session.refs, session.performAction, areas);
   const { state } = session;
   const playerCount = state.game.players.length;
   const canJoin = canJoinAnotherTable(
@@ -29,6 +29,10 @@ function App() {
   const label = connectionLabel(state.role, state.connectionState, playerCount);
   const canPlay =
     state.role === "host" || state.connectionState === "connected";
+  const canMoveOthers =
+    state.role === "host" ||
+    state.game.players.find((player) => player.id === state.myId)?.isVip ===
+      true;
   const ownTiles = state.game.tiles.filter(
     (tile) => tile.ownerId === state.myId && tile.zone === "hand",
   );
@@ -45,6 +49,7 @@ function App() {
       canJoinAnotherTable={canJoin}
       connectionLabel={label}
       canPlay={canPlay}
+      canMoveOthers={canMoveOthers}
       ownTiles={ownTiles}
       publicTiles={publicTiles}
     />

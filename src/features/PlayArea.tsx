@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Player, Tile } from "../game.ts";
-import type { Action, DragState } from "../app/types.ts";
+import type { Action, DragState, HostAction } from "../app/types.ts";
 import type { DragAreas, DragHandlers } from "../app/drag-controller.ts";
 import { TileButton } from "./TileButton.tsx";
 
@@ -16,6 +16,9 @@ export function PlayArea({
   handRef,
   discardRef,
   canPlay,
+  isHost,
+  canMoveOthers,
+  performHostAction,
   canDrawTiles,
   canDrawBlankTile,
   drawTile,
@@ -32,6 +35,9 @@ export function PlayArea({
   handRef: DragAreas["handRef"];
   discardRef: DragAreas["discardRef"];
   canPlay: boolean;
+  isHost: boolean;
+  canMoveOthers: boolean;
+  performHostAction(action: HostAction): void;
   canDrawTiles: boolean;
   canDrawBlankTile: boolean;
   drawTile(blank?: boolean): void;
@@ -62,6 +68,17 @@ export function PlayArea({
           <span>SHARED PLAY AREA</span>
           <span className="caption-rule" />
         </div>
+        {isHost && (
+          <button
+            className="clear-table-button"
+            type="button"
+            disabled={publicTiles.length === 0}
+            aria-label="Return all shared tiles to their owners' racks"
+            onClick={() => performHostAction({ kind: "clear-shared-area" })}
+          >
+            Clear table
+          </button>
+        )}
         <div className="public-play-area" ref={tableRef}>
           {publicTiles
             .filter((tile) => !remoteDragPreviews[tile.id])
@@ -71,6 +88,7 @@ export function PlayArea({
                 tile={tile}
                 players={players}
                 myId={myId}
+                canMoveOthers={canMoveOthers}
                 drag={drag}
                 handlers={handlers}
               />
@@ -81,6 +99,7 @@ export function PlayArea({
               tile={tile}
               players={players}
               myId={myId}
+              canMoveOthers={canMoveOthers}
               drag={drag}
               isRemotePreview
               handlers={handlers}
@@ -213,6 +232,7 @@ export function PlayArea({
                   tile={tile}
                   players={players}
                   myId={myId}
+                  canMoveOthers={canMoveOthers}
                   drag={drag}
                   handlers={handlers}
                 />

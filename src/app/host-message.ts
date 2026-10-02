@@ -1,4 +1,5 @@
 import {
+  canMoveTile,
   discardHandTiles,
   MAX_POSITION_OFFSET,
   MAX_TILE_ROTATION,
@@ -28,6 +29,7 @@ export type HostMessageContext = {
   cancelPendingPeerDragUpdate(channel: RTCDataChannel): void;
   endDragPreview(tileId: string, excludedChannel?: RTCDataChannel): boolean;
   clearDragPreview(tileId: string): void;
+  signalTileSound(): void;
   broadcast(finishedDragTileId?: string): void;
 };
 
@@ -67,6 +69,7 @@ function handleHostHello(
     name: name.trim().slice(0, 24) || "Guest",
     color: playerColor(current.players.length),
     tileCount: 0,
+    isVip: false,
   };
   context.hostChannels.set(channel, playerId);
   const updated = context.commitHostState({
@@ -119,9 +122,9 @@ function handleDragPreview(
     return false;
 
   const tile = context.state.gameRef.current.tiles.find(
-    (candidate) => candidate.id === tileId && candidate.ownerId === playerId,
+    (candidate) => candidate.id === tileId,
   );
-  if (!tile) return false;
+  if (!tile || !canMovePlayerTile(context, playerId, tile)) return false;
   context.queuePeerDragPreview(channel, {
     ...tile,
     zone: "board",
@@ -143,7 +146,8 @@ function handleDragEnd(
     kind !== "drag-end" ||
     typeof tileId !== "string" ||
     !context.state.gameRef.current.tiles.some(
-      (tile) => tile.id === tileId && tile.ownerId === playerId,
+      (tile) =>
+        tile.id === tileId && canMovePlayerTile(context, playerId, tile),
     )
   )
     return false;
@@ -233,6 +237,17 @@ function appendDrawnTiles(context: HostMessageContext, tiles: Tile[]) {
   context.broadcast();
 }
 
+function canMovePlayerTile(
+  context: HostMessageContext,
+  playerId: string,
+  tile: Tile,
+) {
+  const player = context.state.gameRef.current.players.find(
+    (candidate) => candidate.id === playerId,
+  );
+  return canMoveTile(tile, playerId, player?.isVip === true);
+}
+
 function handleMove(
   context: HostMessageContext,
   channel: RTCDataChannel,
@@ -254,7 +269,8 @@ function handleMove(
     typeof rotation !== "number" ||
     !Number.isFinite(rotation) ||
     !current.tiles.some(
-      (tile) => tile.id === tileId && tile.ownerId === playerId,
+      (tile) =>
+        tile.id === tileId && canMovePlayerTile(context, playerId, tile),
     )
   )
     return;
@@ -268,7 +284,11 @@ function handleMove(
     x,
     y,
     rotation,
+    current.players.some(
+      (player) => player.id === playerId && player.isVip === true,
+    ),
   );
+  context.signalTileSound();
   context.commitHostState({ ...current, tiles });
   context.clearDragPreview(tileId);
   context.broadcast(tileId);

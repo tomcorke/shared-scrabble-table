@@ -31,6 +31,12 @@ export type Invite = {
   status: InviteStatus;
 };
 
+export type HostAction =
+  | { kind: "clear-shared-area" }
+  | { kind: "discard-player-tiles"; playerId: string }
+  | { kind: "set-player-vip"; playerId: string; isVip: boolean }
+  | { kind: "disconnect-player"; playerId: string };
+
 export type Action =
   | { kind: "draw"; tile: Tile }
   | { kind: "discard-all" }

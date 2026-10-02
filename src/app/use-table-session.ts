@@ -30,7 +30,11 @@ export function useTableSession(
 
   return {
     state,
-    refs: { myId: state.myIdRef },
+    refs: {
+      myId: state.myIdRef,
+      game: state.gameRef,
+      role: state.roleRef,
+    },
     performAction,
     actions: new SessionActions(state, host, guest, handRef),
   };

@@ -1,6 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
-import { stepTileSwing } from "../game.ts";
+import {
+  canMoveTile,
+  stepTileSwing,
+  type TableState,
+  type Tile,
+} from "../game.ts";
+import type { PeerRole } from "./types.ts";
 import { positionIn, projectDragCenter } from "./dom.ts";
 import {
   createDragController,
@@ -11,11 +17,33 @@ import type { Action, DragState } from "./types.ts";
 
 const SWING_STEP = 1 / 120;
 
+type TileDragRefs = {
+  myId: MutableRefObject<string>;
+  game: MutableRefObject<TableState>;
+  role: MutableRefObject<PeerRole>;
+};
+
+function canMoveSessionTile(
+  tile: Tile,
+  myIdRef: TileDragRefs["myId"],
+  gameRef: TileDragRefs["game"],
+  roleRef: TileDragRefs["role"],
+) {
+  const myId = myIdRef.current;
+  const player = gameRef.current.players.find((item) => item.id === myId);
+  return canMoveTile(
+    tile,
+    myId,
+    roleRef.current === "host" || player?.isVip === true,
+  );
+}
+
 export function useTileDrag(
-  myIdRef: MutableRefObject<string>,
+  refs: TileDragRefs,
   performAction: (action: Action) => void,
   areas: DragAreas,
 ) {
+  const { myId, game, role } = refs;
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const controllerRef = useRef<DragHandlers | null>(null);
@@ -32,7 +60,7 @@ export function useTileDrag(
 
   useLayoutEffect(() => {
     const controller = createDragController({
-      myIdRef,
+      canMoveTile: (tile) => canMoveSessionTile(tile, myId, game, role),
       dragRef,
       setDrag,
       areas,
@@ -43,7 +71,7 @@ export function useTileDrag(
       controller.cancelPendingDragPreview();
       controllerRef.current = null;
     };
-  }, [areas, myIdRef, performAction]);
+  }, [areas, game, myId, role, performAction]);
 
   useEffect(() => {
     const draggingTileId = drag?.tileId;

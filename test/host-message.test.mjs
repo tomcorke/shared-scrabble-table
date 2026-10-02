@@ -13,14 +13,20 @@ const guestTile = {
   rotation: 0,
 };
 
-function createHostContext(drawOptions) {
+function createHostContext(drawOptions, guestIsVip = false) {
   const channel = { readyState: "open", send() {} };
   const state = {
     gameRef: {
       current: {
         players: [
           { id: "host", name: "Host", color: "gold", tileCount: 0 },
-          { id: "guest", name: "Guest", color: "blue", tileCount: 0 },
+          {
+            id: "guest",
+            name: "Guest",
+            color: "blue",
+            tileCount: 0,
+            isVip: guestIsVip,
+          },
         ],
         tiles: [],
         drawOptions,
@@ -28,6 +34,8 @@ function createHostContext(drawOptions) {
     },
   };
   let broadcasts = 0;
+  let previews = 0;
+  let sounds = 0;
   const context = {
     state,
     hostChannels: new Map([[channel, "guest"]]),
@@ -38,7 +46,12 @@ function createHostContext(drawOptions) {
       return next;
     },
     snapshotFor() {},
-    queuePeerDragPreview() {},
+    queuePeerDragPreview() {
+      previews++;
+    },
+    signalTileSound() {
+      sounds++;
+    },
     cancelPendingPeerDragUpdate() {},
     endDragPreview() {},
     clearDragPreview() {},
@@ -46,7 +59,14 @@ function createHostContext(drawOptions) {
       broadcasts++;
     },
   };
-  return { channel, context, state, broadcasts: () => broadcasts };
+  return {
+    channel,
+    context,
+    state,
+    broadcasts: () => broadcasts,
+    previews: () => previews,
+    sounds: () => sounds,
+  };
 }
 
 test("host rejects guest draws when client draws are disabled", () => {
@@ -132,6 +152,115 @@ test("host discards only the requesting player's private tiles", () => {
 
   assert.deepEqual(state.gameRef.current.tiles, [hostTile, guestBoardTile]);
   assert.equal(broadcasts(), 1);
+});
+
+test("a guest tile drop signals the deal sound to every peer", () => {
+  const { channel, context, state, broadcasts, sounds } = createHostContext({
+    allowClientDraw: true,
+    allowClientBlankDraw: true,
+  });
+  state.gameRef.current.tiles = [guestTile];
+
+  handleHostMessage(
+    context,
+    "invite",
+    channel,
+    JSON.stringify({
+      type: "action",
+      action: {
+        kind: "move",
+        tileId: guestTile.id,
+        destination: "board",
+        x: 50,
+        y: 60,
+        rotation: 0,
+      },
+    }),
+  );
+
+  assert.equal(state.gameRef.current.tiles[0].zone, "board");
+  assert.equal(sounds(), 1);
+  assert.equal(broadcasts(), 1);
+});
+
+test("VIP guests can preview another player's shared tile", () => {
+  const { channel, context, state, previews } = createHostContext(
+    { allowClientDraw: true, allowClientBlankDraw: true },
+    true,
+  );
+  state.gameRef.current.tiles = [
+    { ...guestTile, id: "host-board", ownerId: "host", zone: "board" },
+  ];
+
+  handleHostMessage(
+    context,
+    "invite",
+    channel,
+    JSON.stringify({
+      type: "action",
+      action: {
+        kind: "drag-preview",
+        tileId: "host-board",
+        x: 50,
+        y: 60,
+        rotation: 5,
+      },
+    }),
+  );
+
+  assert.equal(previews(), 1);
+});
+
+test("VIP guests can move other players' shared tiles, but not private tiles", () => {
+  const drawOptions = {
+    allowClientDraw: true,
+    allowClientBlankDraw: true,
+  };
+  const regular = createHostContext(drawOptions);
+  const hostBoardTile = {
+    ...guestTile,
+    id: "host-board",
+    ownerId: "host",
+    zone: "board",
+  };
+  regular.state.gameRef.current.tiles = [hostBoardTile];
+  const move = (tileId) =>
+    JSON.stringify({
+      type: "action",
+      action: {
+        kind: "move",
+        tileId,
+        destination: "hand",
+        x: 25,
+        y: 30,
+        rotation: 0,
+      },
+    });
+
+  handleHostMessage(
+    regular.context,
+    "invite",
+    regular.channel,
+    move("host-board"),
+  );
+  assert.deepEqual(regular.state.gameRef.current.tiles, [hostBoardTile]);
+  assert.equal(regular.broadcasts(), 0);
+
+  const vip = createHostContext(drawOptions, true);
+  const hostPrivateTile = { ...guestTile, id: "host-hand", ownerId: "host" };
+  vip.state.gameRef.current.tiles = [hostBoardTile, hostPrivateTile];
+  handleHostMessage(vip.context, "invite", vip.channel, move("host-board"));
+  assert.equal(
+    vip.state.gameRef.current.tiles.find((tile) => tile.id === "host-board")
+      .zone,
+    "hand",
+  );
+  assert.equal(vip.broadcasts(), 1);
+
+  const moved = vip.state.gameRef.current.tiles;
+  handleHostMessage(vip.context, "invite", vip.channel, move("host-hand"));
+  assert.equal(vip.state.gameRef.current.tiles, moved);
+  assert.equal(vip.broadcasts(), 1);
 });
 
 test("host accepts one client-drawn tile per grant result", () => {

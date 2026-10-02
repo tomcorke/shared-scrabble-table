@@ -94,6 +94,7 @@ export async function createGuestAnswer(
     name: state.nameRef.current.trim().slice(0, 24) || "Player",
     color: playerColor(0),
     tileCount: 0,
+    isVip: false,
   };
   state.updateGame({
     players: [localPlayer],

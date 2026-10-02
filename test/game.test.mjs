@@ -6,10 +6,12 @@ import {
   createBlankTile,
   createTile,
   discardHandTiles,
+  discardPlayerTiles,
   drawTileFace,
   findRackPosition,
   moveTile,
   projectedTileCenter,
+  returnBoardTilesToHands,
   stepTileSwing,
   snapshotForPlayer,
   TILE_DISTRIBUTION,
@@ -256,6 +258,56 @@ test("discards all of one player's hand tiles only", () => {
   assert.deepEqual(discardHandTiles(tiles, "player-a"), [tiles[1], tiles[2]]);
 });
 
+test("discards all private and shared tiles for one player", () => {
+  const tiles = [
+    { ...tile, id: "a-hand" },
+    { ...tile, id: "a-board", zone: "board" },
+    { ...tile, id: "b-hand", ownerId: "player-b" },
+    { ...tile, id: "b-board", ownerId: "player-b", zone: "board" },
+  ];
+
+  assert.deepEqual(discardPlayerTiles(tiles, "player-a"), [tiles[2], tiles[3]]);
+});
+
+test("returns shared tiles to each owner's rack without moving private tiles", () => {
+  const privateTile = { ...tile, id: "private-a" };
+  const sharedA1 = { ...tile, id: "shared-a1", zone: "board", x: 180, y: 40 };
+  const sharedB = {
+    ...tile,
+    id: "shared-b",
+    ownerId: "player-b",
+    zone: "board",
+    x: -120,
+    y: 30,
+  };
+  const sharedA2 = { ...tile, id: "shared-a2", zone: "board", x: 250, y: -20 };
+  const cleared = returnBoardTilesToHands(
+    [privateTile, sharedA1, sharedB, sharedA2],
+    980,
+    920,
+    205,
+    () => 0,
+  );
+  const byId = new Map(cleared.map((item) => [item.id, item]));
+
+  assert.equal(cleared.length, 4);
+  assert.deepEqual(byId.get("private-a"), privateTile);
+  assert.deepEqual(
+    { ...byId.get("shared-b"), x: 0, y: 0, zone: "hand" },
+    { ...sharedB, x: 0, y: 0, zone: "hand" },
+  );
+  assert.equal(byId.get("shared-a1").zone, "hand");
+  assert.equal(byId.get("shared-a2").zone, "hand");
+  assert.notDeepEqual(
+    [byId.get("shared-a1").x, byId.get("shared-a1").y],
+    [privateTile.x, privateTile.y],
+  );
+  assert.notDeepEqual(
+    [byId.get("shared-a1").x, byId.get("shared-a1").y],
+    [byId.get("shared-a2").x, byId.get("shared-a2").y],
+  );
+});
+
 test("moving a tile raises it above tiles already placed", () => {
   const laterTile = { ...tile, id: "two", ownerId: "player-b", zone: "board" };
   const moved = moveTile([tile, laterTile], "one", "player-a", "board", 50, 50);
@@ -263,6 +315,20 @@ test("moving a tile raises it above tiles already placed", () => {
   assert.deepEqual(
     moved.map(({ id }) => id),
     ["two", "one"],
+  );
+});
+
+test("other-player movement applies only to shared tiles", () => {
+  const privateTiles = [tile];
+  const sharedTile = { ...tile, zone: "board" };
+
+  assert.equal(
+    moveTile(privateTiles, "one", "player-b", "board", 50, 50, 0, true),
+    privateTiles,
+  );
+  assert.deepEqual(
+    moveTile([sharedTile], "one", "player-b", "hand", 50, 50, 0, true),
+    [{ ...sharedTile, zone: "hand", x: 50, y: 50 }],
   );
 });
 

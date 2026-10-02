@@ -1,4 +1,9 @@
 let audioContext: AudioContext | undefined;
+let soundEnabled = true;
+
+export function setTileSoundEnabled(enabled: boolean) {
+  soundEnabled = enabled;
+}
 
 export function unlockTileAudio() {
   if (typeof window === "undefined" || !window.AudioContext) return;
@@ -12,6 +17,7 @@ export function unlockTileAudio() {
 }
 
 export function playTileSound() {
+  if (!soundEnabled) return;
   const context = audioContext;
   if (!context || context.state === "closed") return;
 

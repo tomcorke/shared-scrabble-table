@@ -7,6 +7,7 @@ export function TileButton({
   tile,
   players,
   myId,
+  canMoveOthers,
   drag,
   isRemotePreview = false,
   handlers,
@@ -14,6 +15,7 @@ export function TileButton({
   tile: Tile;
   players: Player[];
   myId: string;
+  canMoveOthers: boolean;
   drag: DragState | null;
   isRemotePreview?: boolean;
   handlers: DragHandlers;
@@ -21,6 +23,8 @@ export function TileButton({
   const owner = players.find((player) => player.id === tile.ownerId);
   const isDragging = drag?.tileId === tile.id;
   const isBlank = tile.face === "?";
+  const canMove =
+    tile.ownerId === myId || (canMoveOthers && tile.zone === "board");
   const style = isDragging
     ? {
         left: drag.clientX - drag.offsetX,
@@ -37,11 +41,12 @@ export function TileButton({
   return (
     <button
       type="button"
-      className={`scrabble-tile ${tile.zone === "board" ? "public-tile" : "private-tile"}${isDragging ? " is-dragging" : ""}${isRemotePreview ? " remote-drag-preview" : ""}`}
+      className={`scrabble-tile ${tile.zone === "board" ? "public-tile" : "private-tile"}${isDragging ? " is-dragging" : ""}${isRemotePreview ? " remote-drag-preview" : ""}${canMove ? "" : " is-locked"}`}
       style={style}
+      aria-disabled={!canMove}
       aria-label={`${isBlank ? "Blank" : tile.face} tile, ${tile.points} points. ${
         owner?.name ?? "Player"
-      } owns it. Press Enter to move between your rack and the table; arrow keys to nudge; Backspace to discard.`}
+      } owns it. ${canMove ? "Press Enter to move; arrow keys to nudge; Backspace to discard." : "You cannot move another player's tile."}`}
       title={`${owner?.name ?? "Player"}${tile.zone === "board" ? " · public tile" : " · your rack"}`}
       onPointerDown={(event: PointerEvent<HTMLButtonElement>) =>
         handlers.startDrag(event, tile)

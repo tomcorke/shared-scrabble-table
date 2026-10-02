@@ -116,7 +116,8 @@ export function isTableState(value: unknown): value is TableState {
         typeof player.color === "string" &&
         typeof player.tileCount === "number" &&
         Number.isInteger(player.tileCount) &&
-        player.tileCount >= 0,
+        player.tileCount >= 0 &&
+        (player.isVip === undefined || typeof player.isVip === "boolean"),
     ) &&
     value.tiles.every(isTile) &&
     isDrawOptions(value.drawOptions)

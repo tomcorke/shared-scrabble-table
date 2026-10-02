@@ -24,8 +24,8 @@ export async function createHostInvite(
   delivery?: OfferDelivery,
 ) {
   const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  controller.addPeer(id, peer);
   const channel = peer.createDataChannel("shared-scrabble-table");
+  controller.addPeer(id, peer, channel);
   channel.onopen = () => controller.setInviteStatus(id, "connecting");
   channel.onmessage = ({ data }) => controller.handleMessage(id, channel, data);
   channel.onclose = () => controller.disconnectHostChannel(id, channel);
@@ -61,6 +61,7 @@ export async function createHostInvite(
       },
     ]);
   } catch (caught) {
+    channel.onclose = null;
     controller.removePeer(id);
     peer.close();
     throw caught;

@@ -47,7 +47,13 @@ export function useSessionState() {
   });
   const [game, setGame] = useState<TableState>(() => ({
     players: [
-      { id: myId, name: playerName, color: playerColor(0), tileCount: 0 },
+      {
+        id: myId,
+        name: playerName,
+        color: playerColor(0),
+        tileCount: 0,
+        isVip: false,
+      },
     ],
     tiles: [],
     drawOptions: { ...DEFAULT_DRAW_OPTIONS },

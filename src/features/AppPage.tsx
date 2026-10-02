@@ -18,6 +18,7 @@ export function AppPage({
   canJoinAnotherTable,
   connectionLabel,
   canPlay,
+  canMoveOthers,
   ownTiles,
   publicTiles,
 }: {
@@ -30,6 +31,7 @@ export function AppPage({
   canJoinAnotherTable: boolean;
   connectionLabel: string;
   canPlay: boolean;
+  canMoveOthers: boolean;
   ownTiles: Tile[];
   publicTiles: Tile[];
 }) {
@@ -50,6 +52,7 @@ export function AppPage({
         role={state.role}
         onOpenSetup={actions.openHostInvite}
         performAction={actions.performAction}
+        performHostAction={actions.performHostAction}
       />
       <PlayArea
         players={state.game.players}
@@ -63,6 +66,9 @@ export function AppPage({
         handRef={handRef}
         discardRef={discardRef}
         canPlay={canPlay}
+        isHost={state.role === "host"}
+        canMoveOthers={canMoveOthers}
+        performHostAction={actions.performHostAction}
         canDrawTiles={
           canPlay &&
           (state.role === "host" || state.game.drawOptions.allowClientDraw)

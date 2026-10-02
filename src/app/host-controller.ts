@@ -6,21 +6,19 @@ import {
   type Tile,
 } from "../game.ts";
 import { handleHostMessage, type HostMessageContext } from "./host-message.ts";
+import { sendDrawGrant } from "./host-draw-grants.ts";
+import { HostModeration } from "./host-moderation.ts";
 import { HostPreviews, type HostRefs } from "./host-previews.ts";
 import { countTiles, sendMessage } from "./protocol.ts";
 import type { SessionState } from "./session-state.ts";
 import { playTileSound } from "./tile-sound.ts";
-import {
-  MAX_GRANTED_TILES,
-  type Action,
-  type InviteStatus,
-  type PendingDrawGrant,
-} from "./types.ts";
+import type { Action, InviteStatus, PendingDrawGrant } from "./types.ts";
 
 export class HostController {
   private readonly state: SessionState;
   private readonly refs: HostRefs;
   private readonly previews: HostPreviews;
+  readonly performHostAction: HostModeration["perform"];
   private readonly pendingDrawGrants = new Map<string, PendingDrawGrant>();
 
   constructor(
@@ -30,20 +28,34 @@ export class HostController {
     this.state = state;
     this.refs = {
       peers: new Map(),
+      peerChannels: new Map(),
       channels: new Map(),
       lastDragUpdateAt: new Map(),
       pendingDragUpdates: new Map(),
       activeDragOwners: new Map(),
+      activeDragPlayers: new Map(),
     };
     this.previews = new HostPreviews(this.refs, updateRemoteDragPreview);
+    const moderation = new HostModeration({
+      state: this.state,
+      refs: this.refs,
+      commitHostState: this.commitHostState,
+      broadcast: this.broadcast,
+      cancelPending: this.previews.cancelPending,
+      endDragPreview: this.previews.end,
+      disconnectHostChannel: this.disconnectHostChannel,
+    });
+    this.performHostAction = moderation.perform;
   }
 
-  addPeer(id: string, peer: RTCPeerConnection) {
+  addPeer(id: string, peer: RTCPeerConnection, channel?: RTCDataChannel) {
     this.refs.peers.set(id, peer);
+    if (channel) this.refs.peerChannels.set(id, channel);
   }
 
   removePeer(id: string) {
     this.refs.peers.delete(id);
+    this.refs.peerChannels.delete(id);
   }
 
   getPeer(id: string) {
@@ -65,14 +77,18 @@ export class HostController {
     for (const tile of updated.tiles) {
       if (previousIds.has(tile.id)) continue;
       previousIds.add(tile.id);
-      playTileSound();
-      for (const channel of this.refs.channels.keys())
-        sendMessage(channel, { type: "tile-drawn" });
+      this.signalTileSound();
     }
     this.state.gameRef.current = updated;
     this.state.setGame(updated);
     return updated;
   };
+
+  private signalTileSound() {
+    playTileSound();
+    for (const channel of this.refs.channels.keys())
+      sendMessage(channel, { type: "tile-drawn" });
+  }
 
   snapshotFor = (playerId: string) =>
     snapshotForPlayer(this.state.gameRef.current, playerId);
@@ -87,28 +103,43 @@ export class HostController {
     }
   };
 
-  disconnectHostChannel = (inviteId: string, channel: RTCDataChannel) => {
+  readonly disconnectHostChannel = (
+    inviteId: string,
+    channel: RTCDataChannel,
+  ) => {
     const playerId = this.refs.channels.get(channel);
     this.previews.cancelPending(channel);
     this.refs.channels.delete(channel);
+    this.refs.peerChannels.delete(inviteId);
     this.refs.lastDragUpdateAt.delete(channel);
-    if (playerId) {
-      for (const [grantId, grant] of this.pendingDrawGrants) {
-        if (grant.playerId === playerId) this.pendingDrawGrants.delete(grantId);
-      }
-      for (const [tileId, ownerId] of this.refs.activeDragOwners) {
-        if (ownerId === playerId) this.previews.end(tileId);
-      }
-      const current = this.state.gameRef.current;
-      this.commitHostState({
-        ...current,
-        players: current.players.filter((player) => player.id !== playerId),
-        tiles: current.tiles.filter((tile) => tile.ownerId !== playerId),
-      });
-      this.broadcast();
+    const peer = this.refs.peers.get(inviteId);
+    if (peer) {
+      peer.onconnectionstatechange = null;
+      peer.close();
+      this.refs.peers.delete(inviteId);
     }
+    if (playerId) this.removeConnectedPlayer(playerId);
     this.setInviteStatus(inviteId, "disconnected");
   };
+
+  private removeConnectedPlayer(playerId: string) {
+    for (const [grantId, grant] of this.pendingDrawGrants) {
+      if (grant.playerId === playerId) this.pendingDrawGrants.delete(grantId);
+    }
+    for (const [tileId, ownerId] of this.refs.activeDragOwners) {
+      if (ownerId === playerId) this.previews.end(tileId);
+    }
+    for (const [tileId, moverId] of this.refs.activeDragPlayers) {
+      if (moverId === playerId) this.previews.end(tileId);
+    }
+    const current = this.state.gameRef.current;
+    this.commitHostState({
+      ...current,
+      players: current.players.filter((player) => player.id !== playerId),
+      tiles: current.tiles.filter((tile) => tile.ownerId !== playerId),
+    });
+    this.broadcast();
+  }
 
   closeHostConnections = () => {
     for (const channel of this.refs.pendingDragUpdates.keys())
@@ -117,8 +148,14 @@ export class HostController {
       channel.onclose = null;
       channel.close();
     }
+    for (const [id, channel] of this.refs.peerChannels) {
+      channel.onclose = null;
+      if (!this.refs.channels.has(channel)) channel.close();
+      this.refs.peerChannels.delete(id);
+    }
     this.refs.channels.clear();
     this.refs.activeDragOwners.clear();
+    this.refs.activeDragPlayers.clear();
     this.refs.lastDragUpdateAt.clear();
     this.pendingDrawGrants.clear();
     for (const peer of this.refs.peers.values()) {
@@ -146,6 +183,7 @@ export class HostController {
       ),
       endDragPreview: this.previews.end.bind(this.previews),
       clearDragPreview: this.previews.clear.bind(this.previews),
+      signalTileSound: this.signalTileSound.bind(this),
       broadcast: this.broadcast.bind(this),
     };
     handleHostMessage(context, inviteId, channel, data);
@@ -180,7 +218,8 @@ export class HostController {
         const tile = current.tiles.find(
           (candidate) =>
             candidate.id === action.tileId &&
-            candidate.ownerId === this.state.myIdRef.current,
+            (candidate.ownerId === this.state.myIdRef.current ||
+              candidate.zone === "board"),
         );
         if (tile)
           this.previews.broadcast({
@@ -195,57 +234,24 @@ export class HostController {
       case "drag-end":
         this.previews.end(action.tileId);
         break;
-      case "move":
-        this.commitHostState({
-          ...current,
-          tiles: moveTile(
-            current.tiles,
-            action.tileId,
-            this.state.myIdRef.current,
-            action.destination,
-            action.x,
-            action.y,
-            action.rotation,
-          ),
-        });
+      case "move": {
+        const tiles = moveTile(
+          current.tiles,
+          action.tileId,
+          this.state.myIdRef.current,
+          action.destination,
+          action.x,
+          action.y,
+          action.rotation,
+          true,
+        );
+        if (tiles === current.tiles) break;
+        this.signalTileSound();
+        this.commitHostState({ ...current, tiles });
         this.previews.clear(action.tileId);
         this.broadcast(action.tileId);
         break;
+      }
     }
   };
-}
-
-function sendDrawGrant(
-  refs: HostRefs,
-  pendingDrawGrants: Map<string, PendingDrawGrant>,
-  action: Extract<Action, { kind: "grant-draw" }>,
-) {
-  if (
-    !Number.isInteger(action.count) ||
-    action.count < 1 ||
-    action.count > MAX_GRANTED_TILES
-  )
-    return;
-  let channel: RTCDataChannel | undefined;
-  for (const [candidate, playerId] of refs.channels) {
-    if (playerId === action.playerId) {
-      channel = candidate;
-      break;
-    }
-  }
-  if (!channel) return;
-  const grantId = crypto.randomUUID();
-  const count = action.blank ? 1 : action.count;
-  pendingDrawGrants.set(grantId, {
-    playerId: action.playerId,
-    count,
-    blank: action.blank,
-    received: 0,
-  });
-  sendMessage(
-    channel,
-    action.blank
-      ? { type: "draw-blank-grant", grantId }
-      : { type: "draw-grant", grantId, count },
-  );
 }

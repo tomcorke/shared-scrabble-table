@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { playTileSound, unlockTileAudio } from "../src/app/tile-sound.ts";
+import {
+  playTileSound,
+  setTileSoundEnabled,
+  unlockTileAudio,
+} from "../src/app/tile-sound.ts";
 
 class FakeAudioNode {
   frequency = { setValueAtTime() {}, exponentialRampToValueAtTime() {} };
@@ -69,9 +73,14 @@ test("schedules a short tone and click on an unlocked audio context", () => {
 
   try {
     unlockTileAudio();
+    setTileSoundEnabled(false);
+    playTileSound();
+    assert.deepEqual(context.nodes.filter((node) => node.starts).length, 0);
+    setTileSoundEnabled(true);
     playTileSound();
     assert.deepEqual(context.nodes.filter((node) => node.starts).length, 2);
   } finally {
+    setTileSoundEnabled(true);
     if (previousWindow)
       Object.defineProperty(globalThis, "window", previousWindow);
     else delete globalThis.window;

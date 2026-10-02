@@ -68,6 +68,7 @@ export type Player = {
   name: string;
   color: string;
   tileCount: number;
+  isVip?: boolean;
 };
 export type DrawOptions = {
   allowClientDraw: boolean;
@@ -292,6 +293,43 @@ export function discardHandTiles(tiles: Tile[], ownerId: string): Tile[] {
   );
 }
 
+export function discardPlayerTiles(tiles: Tile[], playerId: string): Tile[] {
+  return tiles.filter((tile) => tile.ownerId !== playerId);
+}
+
+export function returnBoardTilesToHands(
+  tiles: Tile[],
+  viewportWidth: number,
+  rackWidth: number,
+  rackHeight: number,
+  random = Math.random,
+): Tile[] {
+  const returned = [...tiles];
+  for (let index = 0; index < returned.length; index++) {
+    const tile = returned[index];
+    if (tile.zone !== "board") continue;
+    const position = findRackPosition(
+      returned,
+      tile.ownerId,
+      tile.rotation,
+      viewportWidth,
+      rackWidth,
+      rackHeight,
+      random,
+    );
+    returned[index] = { ...tile, zone: "hand", ...position };
+  }
+  return returned;
+}
+
+export function canMoveTile(
+  tile: Tile,
+  playerId: string,
+  canMoveOthers = false,
+) {
+  return tile.ownerId === playerId || (canMoveOthers && tile.zone === "board");
+}
+
 export function moveTile(
   tiles: Tile[],
   tileId: string,
@@ -300,9 +338,10 @@ export function moveTile(
   x: number,
   y: number,
   rotation?: number,
+  canMoveOthers = false,
 ): Tile[] {
   const tile = tiles.find((item) => item.id === tileId);
-  if (!tile || tile.ownerId !== ownerId) return tiles;
+  if (!tile || !canMoveTile(tile, ownerId, canMoveOthers)) return tiles;
   if (destination === "discard")
     return tiles.filter((item) => item.id !== tileId);
 

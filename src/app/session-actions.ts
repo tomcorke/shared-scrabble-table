@@ -4,7 +4,7 @@ import type { SessionState } from "./session-state.ts";
 import type { HostSession } from "./use-host-session.ts";
 import type { GuestSession } from "./use-guest-session.ts";
 import { unlockTileAudio } from "./tile-sound.ts";
-import type { Action, SetupTab } from "./types.ts";
+import type { Action, HostAction, SetupTab } from "./types.ts";
 
 export class SessionActions {
   private readonly state: SessionState;
@@ -53,21 +53,34 @@ export class SessionActions {
     }
   };
 
-  private makeTile(blank: boolean) {
-    const game = this.state.gameRef.current;
-    const create = blank ? createBlankTile : createTile;
-    return create(
-      this.state.myIdRef.current,
-      game.tiles,
-      window.innerWidth,
-      this.handRef.current?.clientWidth ?? window.innerWidth,
-      this.handRef.current?.clientHeight ?? 108,
-    );
-  }
-
   drawTile = (blank = false) => {
     unlockTileAudio();
-    this.performAction({ kind: "draw", tile: this.makeTile(blank) });
+    const game = this.state.gameRef.current;
+    const create = blank ? createBlankTile : createTile;
+    this.performAction({
+      kind: "draw",
+      tile: create(
+        this.state.myIdRef.current,
+        game.tiles,
+        window.innerWidth,
+        this.handRef.current?.clientWidth ?? window.innerWidth,
+        this.handRef.current?.clientHeight ?? 108,
+      ),
+    });
+  };
+
+  performHostAction = (action: HostAction) => {
+    if (this.state.roleRef.current !== "host") return;
+    if (action.kind === "clear-shared-area") {
+      const hand = this.handRef.current;
+      this.host.controller.performHostAction(action, {
+        viewportWidth: window.innerWidth,
+        rackWidth: hand?.clientWidth ?? window.innerWidth,
+        rackHeight: hand?.clientHeight ?? 108,
+      });
+      return;
+    }
+    this.host.controller.performHostAction(action);
   };
 
   performAction = (action: Action) => {
@@ -95,10 +108,10 @@ export class SessionActions {
 
   createInvite = async () => {
     this.savePlayerName();
+    unlockTileAudio();
     if (this.state.useSignallingServer) {
       await this.host.startSignallingRoom(this.state.signallingServerUrl);
     } else {
-      unlockTileAudio();
       await this.host.createInvite();
     }
   };

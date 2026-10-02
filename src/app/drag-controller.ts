@@ -32,7 +32,7 @@ export type DragHandlers = {
 };
 
 type DragControllerOptions = {
-  myIdRef: MutableRefObject<string>;
+  canMoveTile(tile: Tile): boolean;
   dragRef: MutableRefObject<DragState | null>;
   setDrag: Dispatch<SetStateAction<DragState | null>>;
   areas: DragAreas;
@@ -40,7 +40,7 @@ type DragControllerOptions = {
 };
 
 class DragController implements DragHandlers {
-  private readonly myIdRef: MutableRefObject<string>;
+  private readonly canMoveTile: (tile: Tile) => boolean;
   private readonly dragRef: MutableRefObject<DragState | null>;
   private readonly setDrag: Dispatch<SetStateAction<DragState | null>>;
   private readonly areas: DragAreas;
@@ -49,7 +49,7 @@ class DragController implements DragHandlers {
   private lastDragUpdateAt = Number.NEGATIVE_INFINITY;
 
   constructor(options: DragControllerOptions) {
-    this.myIdRef = options.myIdRef;
+    this.canMoveTile = options.canMoveTile;
     this.dragRef = options.dragRef;
     this.setDrag = options.setDrag;
     this.areas = options.areas;
@@ -155,7 +155,7 @@ class DragController implements DragHandlers {
   }
 
   startDrag(event: PointerEvent<HTMLButtonElement>, tile: Tile) {
-    if (tile.ownerId !== this.myIdRef.current || event.button !== 0) return;
+    if (!this.canMoveTile(tile) || event.button !== 0) return;
     this.cancelPendingDragPreview();
     event.preventDefault();
     const element = event.currentTarget;
@@ -354,7 +354,7 @@ class DragController implements DragHandlers {
   }
 
   handleTileKeyDown(event: KeyboardEvent<HTMLButtonElement>, tile: Tile) {
-    if (tile.ownerId !== this.myIdRef.current) return;
+    if (!this.canMoveTile(tile)) return;
     const action = tileKeyboardAction(event.key, event.shiftKey, tile);
     if (!action) return;
     event.preventDefault();

@@ -12,6 +12,12 @@
     gap: 10px;
   }
 
+  .sound-toggle {
+    min-height: 30px;
+    padding: 0 7px;
+    font-size: 9px;
+  }
+
   .connection-pill {
     max-width: 108px;
     font-size: 9px;
@@ -45,6 +51,11 @@
 
   .public-play-area {
     inset: 38px 14px 28px;
+  }
+
+  .clear-table-button {
+    top: 10px;
+    right: 14px;
   }
 
   .draw-station-area {
@@ -128,18 +139,53 @@
   }
 
   .app-title h1 {
-    font-size: 13px;
+    font-size: 12px;
+  }
+
+  .topbar-actions {
+    gap: 4px;
+  }
+
+  .sound-toggle {
+    width: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .sound-toggle-label {
+    display: none;
   }
 
   .connection-pill {
-    max-width: 80px;
+    max-width: 64px;
     gap: 5px;
     line-height: 1.2;
   }
 
   .invite-button {
     gap: 4px;
-    padding: 0 7px;
+    padding: 0 5px;
+    font-size: 8px;
+  }
+
+  .table-caption {
+    left: 12px;
+    gap: 6px;
+    font-size: 7px;
+    letter-spacing: 0.12em;
+    transform: none;
+  }
+
+  .caption-rule {
+    width: 20px;
+  }
+
+  .clear-table-button {
+    right: 9px;
+    padding: 0 6px;
+    font-size: 8px;
   }
 
   .player-strip {
