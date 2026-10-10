@@ -8,7 +8,7 @@ import {
 
 class FakeAudioNode {
   frequency = { setValueAtTime() {}, exponentialRampToValueAtTime() {} };
-  gain = { setValueAtTime() {}, exponentialRampToValueAtTime() {} };
+  gain = { setValueAtTime() {}, linearRampToValueAtTime() {} };
   starts = 0;
 
   connect() {
@@ -56,7 +56,7 @@ class FakeAudioContext {
   }
 }
 
-test("schedules a short tone and click on an unlocked audio context", () => {
+test("plays every Sound Creator layer only after unlock", () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   const context = new FakeAudioContext();
   Object.defineProperty(globalThis, "window", {
@@ -72,13 +72,15 @@ test("schedules a short tone and click on an unlocked audio context", () => {
   });
 
   try {
+    playTileSound();
+    assert.equal(context.nodes.length, 0);
     unlockTileAudio();
     setTileSoundEnabled(false);
     playTileSound();
     assert.deepEqual(context.nodes.filter((node) => node.starts).length, 0);
     setTileSoundEnabled(true);
     playTileSound();
-    assert.deepEqual(context.nodes.filter((node) => node.starts).length, 2);
+    assert.deepEqual(context.nodes.filter((node) => node.starts).length, 6);
   } finally {
     setTileSoundEnabled(true);
     if (previousWindow)
