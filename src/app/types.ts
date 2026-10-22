@@ -19,7 +19,11 @@ export type InviteTransport = "manual" | "server";
 export type SignallingRoomStatus = "idle" | "starting" | "ready" | "error";
 export type SignallingJoinStatus =
   "idle" | "requesting" | "waiting" | "answering" | "submitted";
-export type SignallingRequest = { clientId: string; createdAt: string };
+export type SignallingRequest = {
+  clientId: string;
+  createdAt: string;
+  name?: string;
+};
 export type InviteStatus =
   "ready" | "connecting" | "connected" | "failed" | "disconnected";
 
@@ -29,6 +33,7 @@ export type Invite = {
   offer: string;
   answer: string;
   status: InviteStatus;
+  name?: string;
 };
 
 export type HostAction =

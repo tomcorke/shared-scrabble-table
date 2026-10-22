@@ -94,9 +94,9 @@ export function HostSignallingPanel({ session }: { session: TableSession }) {
       {state.signallingRequests.length > 0 && (
         <div className="invite-list">
           <h3>Join requests</h3>
-          {state.signallingRequests.map(({ clientId }, index) => (
+          {state.signallingRequests.map(({ clientId, name }, index) => (
             <article className="invite-card" key={clientId}>
-              <strong>Join request {index + 1}</strong>
+              <strong>{name ?? `Join request ${index + 1}`}</strong>
               <button
                 className="secondary-action"
                 type="button"

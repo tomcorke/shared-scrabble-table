@@ -22,6 +22,7 @@ export async function createHostInvite(
   controller: HostController,
   id: string,
   delivery?: OfferDelivery,
+  name?: string,
 ) {
   const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   const channel = peer.createDataChannel("shared-scrabble-table");
@@ -58,6 +59,7 @@ export async function createHostInvite(
         offer: delivery ? "" : JSON.stringify(description),
         answer: "",
         status: "ready",
+        name,
       },
     ]);
   } catch (caught) {

@@ -47,7 +47,12 @@ export async function joinViaSignallingServer(
   joinRequestRef.current = { client, code, clientId };
   try {
     state.setSignallingJoinStatus("requesting");
-    await client.requestToJoin(code, clientId, poll.signal);
+    await client.requestToJoin(
+      code,
+      clientId,
+      state.nameRef.current,
+      poll.signal,
+    );
     if (poll.signal.aborted) {
       await client.cancelJoinRequest(code, clientId).catch(() => undefined);
       return;

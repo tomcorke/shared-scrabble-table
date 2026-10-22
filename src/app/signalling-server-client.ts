@@ -133,7 +133,13 @@ async function pendingRequests(
   ) {
     throw new Error("Signalling server returned invalid join requests");
   }
-  return result.requests as SignallingRequest[];
+  // Older servers omit `name`; drop anything that is not a non-empty string.
+  return (result.requests as SignallingRequest[]).map(
+    ({ clientId, createdAt, name }) =>
+      typeof name === "string" && name.trim()
+        ? { clientId, createdAt, name: name.trim().slice(0, 24) }
+        : { clientId, createdAt },
+  );
 }
 
 async function getJoinRequest(
@@ -200,10 +206,15 @@ export function createSignallingServerClient(
 
   return {
     createRoom: createRoom.bind(null, send),
-    requestToJoin: (code: string, clientId: string, signal?: AbortSignal) =>
+    requestToJoin: (
+      code: string,
+      clientId: string,
+      name: string,
+      signal?: AbortSignal,
+    ) =>
       send<{ clientId: string }>(
         `/api/rooms/${encodeURIComponent(code)}/requests`,
-        { method: "POST", body: { clientId }, signal },
+        { method: "POST", body: { clientId, name }, signal },
       ),
     pendingRequests: pendingRequests.bind(null, send),
     rejectRequest: (

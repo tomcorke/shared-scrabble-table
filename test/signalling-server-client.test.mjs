@@ -50,3 +50,18 @@ test("uses host and guest bearer tokens on their respective requests", async () 
     "Bearer 6e0d47c2-e6c3-4fb7-8c20-799da440ddc0",
   );
 });
+
+test("keeps join request names and tolerates servers without them", async () => {
+  const requests = [
+    { clientId: "a", createdAt: "t", name: " Sam " },
+    { clientId: "b", createdAt: "t" },
+    { clientId: "c", createdAt: "t", name: 42 },
+  ];
+  const fetcher = async () => new Response(JSON.stringify({ requests }));
+  const client = createSignallingServerClient("http://localhost:8787", fetcher);
+  assert.deepEqual(await client.pendingRequests("7K2M", "host-secret"), [
+    { clientId: "a", createdAt: "t", name: "Sam" },
+    { clientId: "b", createdAt: "t" },
+    { clientId: "c", createdAt: "t" },
+  ]);
+});

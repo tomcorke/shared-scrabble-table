@@ -151,7 +151,7 @@ export function SetupDialog({ session }: { session: TableSession }) {
                   <div className="invite-card-heading">
                     <strong>
                       {invite.transport === "server"
-                        ? "Guest request"
+                        ? (invite.name ?? "Guest request")
                         : `Invite ${index + 1}`}
                     </strong>
                     <span className={`invite-status status-${invite.status}`}>

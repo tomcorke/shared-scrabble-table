@@ -89,7 +89,10 @@ export function useHostSession(
       throw new Error("Start an exchange room first");
     if (accept) {
       if (controller.getPeer(clientId)) return;
-      await createHostInvite(state, controller, clientId, room);
+      const name = state.signallingRequests.find(
+        (request) => request.clientId === clientId,
+      )?.name;
+      await createHostInvite(state, controller, clientId, room, name);
       return;
     }
     await room.client.rejectRequest(
