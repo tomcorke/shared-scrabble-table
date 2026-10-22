@@ -10,10 +10,28 @@ import type {
   SignallingRoomStatus,
 } from "./types.ts";
 
+// Join links: ?server=<origin>&join=<code> opens the join dialog pre-filled.
+const linkParams = new URLSearchParams(window.location.search);
+const linkServer = linkParams.get("server") ?? "";
+const linkJoinCode = (linkParams.get("join") ?? "")
+  .toUpperCase()
+  .replace(/[^A-Z0-9]/g, "")
+  .slice(0, 4);
+const hasJoinLink = Boolean(linkServer && linkJoinCode);
+
+export function joinLink(serverUrl: string, code: string) {
+  const url = new URL(window.location.pathname, window.location.origin);
+  url.search = new URLSearchParams({
+    server: serverUrl,
+    join: code,
+  }).toString();
+  return url.toString();
+}
+
 function useSignallingState() {
-  const [useServer, setUseServer] = useState(false);
-  const [serverUrl, setServerUrl] = useState("");
-  const [joinCode, setJoinCode] = useState("");
+  const [useServer, setUseServer] = useState(hasJoinLink);
+  const [serverUrl, setServerUrl] = useState(linkServer);
+  const [joinCode, setJoinCode] = useState(hasJoinLink ? linkJoinCode : "");
   const [roomCode, setRoomCode] = useState("");
   const [requests, setRequests] = useState<SignallingRequest[]>([]);
   const [roomStatus, setRoomStatus] = useState<SignallingRoomStatus>("idle");
@@ -59,8 +77,10 @@ export function useSessionState() {
     drawOptions: { ...DEFAULT_DRAW_OPTIONS },
   }));
   const [role, setRole] = useState<PeerRole>("host");
-  const [setupTab, setSetupTab] = useState<SetupTab>("host");
-  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupTab, setSetupTab] = useState<SetupTab>(
+    hasJoinLink ? "join" : "host",
+  );
+  const [setupOpen, setSetupOpen] = useState(hasJoinLink);
   const [invites, setInvites] = useState<Invite[]>([]);
   const signalling = useSignallingState();
   const [remoteOffer, setRemoteOffer] = useState("");

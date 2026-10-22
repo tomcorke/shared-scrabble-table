@@ -1,3 +1,4 @@
+import { joinLink } from "../app/session-state.ts";
 import type { TableSession } from "../app/use-table-session.ts";
 
 export function HostSignallingPanel({ session }: { session: TableSession }) {
@@ -20,6 +21,20 @@ export function HostSignallingPanel({ session }: { session: TableSession }) {
             Join code
             <input readOnly value={state.signallingRoomCode} />
           </label>
+          <button
+            className="primary-action"
+            type="button"
+            onClick={() =>
+              void actions.attempt(() =>
+                actions.copyText(
+                  joinLink(state.signallingServerUrl, state.signallingRoomCode),
+                  "Join link",
+                ),
+              )
+            }
+          >
+            Copy join link
+          </button>
           <button
             className="secondary-action"
             type="button"
@@ -47,7 +62,7 @@ export function HostSignallingPanel({ session }: { session: TableSession }) {
           >
             <span className="connection-dot" />
             {state.signallingRoomStatus === "ready"
-              ? "Room open. Share both values; requests appear here."
+              ? "Room open. Share the join link; requests appear here."
               : "Room stopped. Start a new room to accept guests."}
           </p>
           {state.signallingRoomStatus === "error" && (
