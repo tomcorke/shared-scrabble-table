@@ -40,6 +40,12 @@
   letter-spacing: -0.03em;
 }
 
+.app-title .build-info {
+  margin: 0;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
 .topbar-actions {
   gap: 18px;
 }

@@ -27,6 +27,7 @@ export function TopBar({
     <header className="topbar">
       <div className="app-title">
         <h1>Shared Scrabble Table</h1>
+        <p className="build-info">{__BUILD_INFO__}</p>
       </div>
       <div className="topbar-actions">
         <button
